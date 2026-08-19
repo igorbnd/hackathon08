@@ -1,0 +1,20 @@
+{
+  "name": "invoiceiq",
+  "private": true,
+  "workspaces": [
+    "packages/schema",
+    "api",
+    "web",
+    "infra"
+  ],
+  "scripts": {
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
