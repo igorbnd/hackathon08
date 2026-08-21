@@ -13,13 +13,13 @@
  * Usage: npx tsx generate-imperfect-scans.ts
  *
  * Attribution: sharp (Apache-2.0) - https://github.com/lovell/sharp
- *              pdf-lib (MIT) - https://github.com/Hopding/pdf-lib
+ *              pdf2pic (MIT) - https://github.com/yakovmeister/pdf2pic
  */
 
-import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
-import { PDFDocument } from "pdf-lib";
+import { fromPath } from "pdf2pic";
 
 const FIXTURES_DIR = join(import.meta.dirname ?? ".", "..");
 const PDFS_DIR = join(FIXTURES_DIR, "pdfs");
@@ -55,39 +55,33 @@ const SCAN_TARGETS = [
 ];
 
 /**
- * Convert a PDF page to a raw image buffer using pdf-lib for dimensions
- * and sharp for rendering. Since pdf-lib cannot rasterize, we create a
- * white page with embedded text representation and apply degradations.
- *
- * In a production setup you would use pdf-poppler or pdf2pic for true
- * rasterization. For fixture generation, we create a synthetic scan-like
- * image at 150 DPI based on the PDF page dimensions.
+ * Convert a PDF page to a rasterized image buffer using pdf2pic.
+ * pdf2pic uses GraphicsMagick/ImageMagick under the hood to produce
+ * a faithful rasterization of the PDF content including all text and graphics.
  */
 async function pdfToImage(pdfPath: string): Promise<Buffer> {
-  const pdfBytes = await readFile(pdfPath);
-  const pdfDoc = await PDFDocument.load(pdfBytes);
-  const page = pdfDoc.getPage(0);
-  const { width, height } = page.getSize();
-
-  // Create an image at 150 DPI (scale factor from 72 DPI PDF points)
-  const scale = 150 / 72;
-  const imgWidth = Math.round(width * scale);
-  const imgHeight = Math.round(height * scale);
-
-  // Create a white canvas representing the scanned page
-  // In production this would be a proper PDF rasterization
-  const img = sharp({
-    create: {
-      width: imgWidth,
-      height: imgHeight,
-      channels: 3,
-      background: { r: 255, g: 255, b: 255 },
-    },
+  const converter = fromPath(pdfPath, {
+    density: 150,
+    saveFilename: "temp-scan",
+    savePath: SCANS_DIR,
+    format: "png",
+    width: 1240,
+    height: 1754,
   });
 
-  // Overlay the PDF content as a greyscale representation
-  // For fixture generation purposes, we add noise to simulate printed text
-  return img.png().toBuffer();
+  const result = await converter(1); // Convert first page
+
+  if (!result.path) {
+    throw new Error(`Failed to rasterize PDF: ${pdfPath}`);
+  }
+
+  // Read the rasterized image and return as buffer
+  const imageBuffer = await readFile(result.path);
+  // Clean up the temp file - we will write the degraded version separately
+  const { unlink } = await import("node:fs/promises");
+  await unlink(result.path).catch(() => {});
+
+  return imageBuffer;
 }
 
 async function applySkew(imageBuffer: Buffer, degrees: number): Promise<Buffer> {
@@ -137,6 +131,8 @@ async function main(): Promise<void> {
 
   await mkdir(SCANS_DIR, { recursive: true });
 
+  // Verify PDFs exist
+  const { readdir } = await import("node:fs/promises");
   const existingPdfs = await readdir(PDFS_DIR).catch(() => []);
   if (existingPdfs.length === 0) {
     console.error(
@@ -160,7 +156,7 @@ async function main(): Promise<void> {
       `Processing ${target.file} with degradation: ${target.degradation}`
     );
 
-    // Convert PDF to image
+    // Rasterize PDF to image using pdf2pic (GraphicsMagick-based)
     let imageBuffer = await pdfToImage(pdfPath);
 
     // Apply degradation
