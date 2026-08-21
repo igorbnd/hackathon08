@@ -16,14 +16,14 @@
     {
       "description": "Line rental",
       "quantity": 1,
-      "unitPrice": 14.16,
-      "amount": 14.16,
+      "unitPrice": 12.00,
+      "amount": 12.00,
       "vatRate": 20
     }
   ],
-  "subtotal": 55.45,
-  "vatAmount": 11.09,
-  "total": 66.54,
+  "subtotal": 53.29,
+  "vatAmount": 10.66,
+  "total": 63.95,
   "currency": "GBP",
   "status": "unpaid",
   "category": "broadband",
@@ -31,6 +31,8 @@
     "contractStartDate": "2022-01-15",
     "contractEndDate": "2024-01-14",
     "priceIncreasePercent": 18,
+    "priceIncreaseAppliedTo": "subscription-only",
+    "previousSubscriptionPrice": 34.99,
     "previousTotal": 56.39,
     "noticeSent": false,
     "story": "price-rise-triggered"
