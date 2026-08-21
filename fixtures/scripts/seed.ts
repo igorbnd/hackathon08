@@ -35,7 +35,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  PutCommand,
+  BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 // ---------- Configuration ----------
@@ -53,6 +53,7 @@ const FIXTURES_DIR = join(import.meta.dirname ?? ".", "..");
 const INVOICES_DIR = join(FIXTURES_DIR, "invoices");
 const PDFS_DIR = join(FIXTURES_DIR, "pdfs");
 const SCANS_DIR = join(FIXTURES_DIR, "scans");
+const VENDORS_FILE = join(FIXTURES_DIR, "vendors.json");
 
 // ---------- AWS Clients ----------
 
@@ -64,6 +65,55 @@ const ddbClient = DynamoDBDocumentClient.from(
     marshallOptions: { removeUndefinedValues: true },
   }
 );
+
+// ---------- Batch Write Helper ----------
+
+/**
+ * Writes items to DynamoDB in batches of up to 25 (the BatchWriteItem limit).
+ * Handles unprocessed items by retrying with exponential backoff.
+ */
+async function batchWriteItems(
+  items: Array<Record<string, unknown>>
+): Promise<number> {
+  const BATCH_SIZE = 25;
+  let totalWritten = 0;
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    const requestItems = batch.map((item) => ({
+      PutRequest: { Item: item },
+    }));
+
+    let unprocessed: typeof requestItems | undefined = requestItems;
+    let retries = 0;
+
+    while (unprocessed && unprocessed.length > 0) {
+      const response = await ddbClient.send(
+        new BatchWriteCommand({
+          RequestItems: {
+            [TABLE_NAME]: unprocessed,
+          },
+        })
+      );
+
+      const remaining = response.UnprocessedItems?.[TABLE_NAME];
+      if (remaining && remaining.length > 0) {
+        unprocessed = remaining as typeof requestItems;
+        retries++;
+        // Exponential backoff for unprocessed items
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(1000 * 2 ** retries, 10000))
+        );
+      } else {
+        unprocessed = undefined;
+      }
+    }
+
+    totalWritten += batch.length;
+  }
+
+  return totalWritten;
+}
 
 // ---------- Cognito ----------
 
@@ -160,6 +210,24 @@ async function uploadInvoiceFiles(userId: string): Promise<void> {
 
 // ---------- DynamoDB ----------
 
+interface VendorRecord {
+  id: string;
+  name: string;
+  address: {
+    line1: string;
+    line2: string;
+    city: string;
+    postcode: string;
+    country: string;
+  };
+  phone: string;
+  email: string;
+  taxId: string;
+  accountNumber: string;
+  type: string;
+  description: string;
+}
+
 interface InvoiceRecord {
   invoiceId: string;
   vendorId: string;
@@ -183,52 +251,73 @@ interface InvoiceRecord {
   metadata?: Record<string, unknown>;
 }
 
+async function writeVendorRecords(): Promise<void> {
+  console.log("Writing vendor records to DynamoDB...");
+
+  const raw = await readFile(VENDORS_FILE, "utf-8");
+  const vendors: VendorRecord[] = JSON.parse(raw);
+
+  const items = vendors.map((vendor) => ({
+    PK: `VENDOR#${vendor.id}`,
+    SK: "PROFILE",
+    vendorId: vendor.id,
+    name: vendor.name,
+    address: vendor.address,
+    phone: vendor.phone,
+    email: vendor.email,
+    taxId: vendor.taxId,
+    accountNumber: vendor.accountNumber,
+    type: vendor.type,
+    description: vendor.description,
+    entityType: "VENDOR",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
+
+  const count = await batchWriteItems(items);
+  console.log(`  Wrote ${count} vendor records`);
+}
+
 async function writeInvoiceRecords(userId: string): Promise<void> {
   console.log("Writing invoice records to DynamoDB...");
 
   const files = await readdir(INVOICES_DIR);
   const jsonFiles = files.filter((f) => f.endsWith(".json")).sort();
 
-  let count = 0;
-  for (const file of jsonFiles) {
-    const raw = await readFile(join(INVOICES_DIR, file), "utf-8");
-    const invoice: InvoiceRecord = JSON.parse(raw);
+  const items = await Promise.all(
+    jsonFiles.map(async (file) => {
+      const raw = await readFile(join(INVOICES_DIR, file), "utf-8");
+      const invoice: InvoiceRecord = JSON.parse(raw);
 
-    const item = {
-      PK: `USER#${userId}`,
-      SK: `INV#${invoice.invoiceId}`,
-      GSI1PK: `USER#${userId}`,
-      GSI1SK: `DATE#${invoice.issueDate}`,
-      GSI2PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
-      GSI2SK: `DATE#${invoice.issueDate}`,
-      invoiceId: invoice.invoiceId,
-      vendorId: invoice.vendorId,
-      vendorName: invoice.vendorName,
-      issueDate: invoice.issueDate,
-      dueDate: invoice.dueDate,
-      referenceNumber: invoice.referenceNumber,
-      lineItems: invoice.lineItems,
-      subtotal: invoice.subtotal,
-      vatAmount: invoice.vatAmount,
-      total: invoice.total,
-      currency: invoice.currency,
-      status: invoice.status,
-      category: invoice.category,
-      metadata: invoice.metadata ?? {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      entityType: "INVOICE",
-    };
+      return {
+        PK: `USER#${userId}`,
+        SK: `INV#${invoice.invoiceId}`,
+        GSI1PK: `USER#${userId}`,
+        GSI1SK: `DATE#${invoice.issueDate}`,
+        GSI2PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
+        GSI2SK: `DATE#${invoice.issueDate}`,
+        invoiceId: invoice.invoiceId,
+        vendorId: invoice.vendorId,
+        vendorName: invoice.vendorName,
+        issueDate: invoice.issueDate,
+        dueDate: invoice.dueDate,
+        referenceNumber: invoice.referenceNumber,
+        lineItems: invoice.lineItems,
+        subtotal: invoice.subtotal,
+        vatAmount: invoice.vatAmount,
+        total: invoice.total,
+        currency: invoice.currency,
+        status: invoice.status,
+        category: invoice.category,
+        metadata: invoice.metadata ?? {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        entityType: "INVOICE",
+      };
+    })
+  );
 
-    await ddbClient.send(
-      new PutCommand({
-        TableName: TABLE_NAME,
-        Item: item,
-      })
-    );
-    count++;
-  }
-
+  const count = await batchWriteItems(items);
   console.log(`  Wrote ${count} invoice records`);
 }
 
@@ -256,6 +345,7 @@ async function main(): Promise<void> {
 
   const userId = await ensureDemoUser();
   await uploadInvoiceFiles(userId);
+  await writeVendorRecords();
   await writeInvoiceRecords(userId);
 
   console.log("\n=== Seed complete ===");
