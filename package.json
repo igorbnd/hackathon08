@@ -14,7 +14,8 @@
     "typecheck": "tsc --build",
     "test": "vitest run --workspace vitest.workspace.ts",
     "test:watch": "vitest --workspace vitest.workspace.ts",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "seed": "npm run seed --prefix fixtures/scripts"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.8.0",

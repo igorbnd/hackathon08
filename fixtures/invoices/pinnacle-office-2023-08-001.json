@@ -1,0 +1,31 @@
+{
+  "invoiceId": "INV-PIN-2023-0801",
+  "vendorId": "pinnacle-office",
+  "vendorName": "Pinnacle Office Supplies",
+  "issueDate": "2023-08-22",
+  "dueDate": "2023-09-22",
+  "referenceNumber": "POS/INV/2023-1204",
+  "lineItems": [
+    {
+      "description": "A4 Printer Paper (box of 5 reams)",
+      "quantity": 10,
+      "unitPrice": 22.50,
+      "amount": 225.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Toner Cartridge - HP LaserJet Pro",
+      "quantity": 3,
+      "unitPrice": 64.99,
+      "amount": 194.97,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 419.97,
+  "vatAmount": 83.99,
+  "total": 503.96,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "office-supplies",
+  "metadata": {}
+}

@@ -1,0 +1,172 @@
+[
+  {
+    "id": "nexwave-fibre",
+    "name": "Nexwave Fibre Ltd",
+    "address": {
+      "line1": "Unit 7, Broadgate Business Park",
+      "line2": "Kingsbrook Lane",
+      "city": "Thornbury",
+      "postcode": "TH4 9PQ",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567001",
+    "email": "billing@nexwavefibre.example",
+    "taxId": "GB 123 4567 01",
+    "accountNumber": "NXW-ACC-20210045",
+    "type": "broadband",
+    "description": "Fibre broadband and landline provider"
+  },
+  {
+    "id": "pinnacle-office",
+    "name": "Pinnacle Office Supplies",
+    "address": {
+      "line1": "14 Commerce Street",
+      "line2": "",
+      "city": "Redvale",
+      "postcode": "RV2 3AB",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567002",
+    "email": "accounts@pinnacleoffice.example",
+    "taxId": "GB 234 5678 02",
+    "accountNumber": "PIN-ACC-20210112",
+    "type": "office-supplies",
+    "description": "Office furniture, stationery, and consumables"
+  },
+  {
+    "id": "clouddeck-pro",
+    "name": "CloudDeck Pro Ltd",
+    "address": {
+      "line1": "Floor 3, Skyline Tower",
+      "line2": "Innovation Quarter",
+      "city": "Millhaven",
+      "postcode": "MH1 7XY",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567003",
+    "email": "subscriptions@clouddeckpro.example",
+    "taxId": "GB 345 6789 03",
+    "accountNumber": "CDP-SUB-20220087",
+    "type": "saas",
+    "description": "Cloud project management and collaboration platform"
+  },
+  {
+    "id": "greendale-energy",
+    "name": "Greendale Energy plc",
+    "address": {
+      "line1": "Greendale House",
+      "line2": "Riverside Way",
+      "city": "Ashford Hollow",
+      "postcode": "AH8 2LN",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567004",
+    "email": "customercare@greendaleenergy.example",
+    "taxId": "GB 456 7890 04",
+    "accountNumber": "GDE-ELEC-30091287",
+    "type": "utility",
+    "description": "Electricity and gas utility provider"
+  },
+  {
+    "id": "brightpath-consulting",
+    "name": "Brightpath Consulting Group",
+    "address": {
+      "line1": "Suite 201, Canopy House",
+      "line2": "Westfield Road",
+      "city": "Northgate",
+      "postcode": "NG3 5RT",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567005",
+    "email": "invoices@brightpathconsulting.example",
+    "taxId": "GB 567 8901 05",
+    "accountNumber": "BPC-CLI-20230034",
+    "type": "consulting",
+    "description": "IT strategy and digital transformation consulting"
+  },
+  {
+    "id": "elmwood-stationery",
+    "name": "Elmwood Stationery Co",
+    "address": {
+      "line1": "8 Birch Lane",
+      "line2": "Elmwood Industrial Estate",
+      "city": "Copperfield",
+      "postcode": "CF6 1WQ",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567006",
+    "email": "orders@elmwoodstationery.example",
+    "taxId": "GB 678 9012 06",
+    "accountNumber": "ELM-TRADE-44029",
+    "type": "stationery",
+    "description": "Bulk stationery and printing supplies"
+  },
+  {
+    "id": "crestfield-insurance",
+    "name": "Crestfield Insurance Services",
+    "address": {
+      "line1": "Crestfield Chambers",
+      "line2": "10 Highworth Street",
+      "city": "Langton Parva",
+      "postcode": "LP4 8DE",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567007",
+    "email": "renewals@crestfieldinsurance.example",
+    "taxId": "GB 789 0123 07",
+    "accountNumber": "CFI-POL-BUS-2023-0912",
+    "type": "insurance",
+    "description": "Business and professional indemnity insurance"
+  },
+  {
+    "id": "borough-westmere",
+    "name": "Borough of Westmere Council",
+    "address": {
+      "line1": "Westmere Town Hall",
+      "line2": "Civic Square",
+      "city": "Westmere",
+      "postcode": "WM1 1AA",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567008",
+    "email": "revenues@westmere.gov.example",
+    "taxId": "GB 890 1234 08",
+    "accountNumber": "WBC-CT-74521903",
+    "type": "council-tax",
+    "description": "Local authority council tax and business rates"
+  },
+  {
+    "id": "swiftline-telecom",
+    "name": "Swiftline Telecom",
+    "address": {
+      "line1": "Horizon House",
+      "line2": "24 Signal Road",
+      "city": "Bakerston",
+      "postcode": "BK5 3FG",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567009",
+    "email": "billing@swiftlinetelecom.example",
+    "taxId": "GB 901 2345 09",
+    "accountNumber": "SLT-MOB-20220156",
+    "type": "telecom",
+    "description": "Mobile phone and data plans"
+  },
+  {
+    "id": "ironbark-it",
+    "name": "Ironbark IT Services",
+    "address": {
+      "line1": "Workshop 12",
+      "line2": "Grafton Technology Park",
+      "city": "Stonebridge",
+      "postcode": "SB7 4KJ",
+      "country": "GB"
+    },
+    "phone": "+44 1234 567010",
+    "email": "support@ironbarkit.example",
+    "taxId": "GB 012 3456 10",
+    "accountNumber": "IBI-SVC-20230078",
+    "type": "it-maintenance",
+    "description": "IT hardware maintenance and managed services"
+  }
+]

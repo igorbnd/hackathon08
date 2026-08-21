@@ -1,0 +1,36 @@
+{
+  "invoiceId": "INV-GDE-2023-1101",
+  "vendorId": "greendale-energy",
+  "vendorName": "Greendale Energy plc",
+  "issueDate": "2023-11-10",
+  "dueDate": "2023-11-24",
+  "referenceNumber": "GDE/Q4/2023/44824",
+  "lineItems": [
+    {
+      "description": "Electricity supply - actual reading (1,350 kWh)",
+      "quantity": 1350,
+      "unitPrice": 0.28,
+      "amount": 378.00,
+      "vatRate": 5
+    },
+    {
+      "description": "Standing charge (90 days)",
+      "quantity": 90,
+      "unitPrice": 0.46,
+      "amount": 41.40,
+      "vatRate": 5
+    }
+  ],
+  "subtotal": 419.40,
+  "vatAmount": 20.97,
+  "total": 440.37,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "utility",
+  "metadata": {
+    "meterReading": 48720,
+    "readingType": "actual",
+    "kwhUsed": 1350,
+    "story": "estimated-reading-baseline"
+  }
+}

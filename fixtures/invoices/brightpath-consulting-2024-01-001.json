@@ -1,0 +1,42 @@
+{
+  "invoiceId": "INV-BPC-2024-0101",
+  "vendorId": "brightpath-consulting",
+  "vendorName": "Brightpath Consulting Group",
+  "issueDate": "2024-01-31",
+  "dueDate": "2024-02-28",
+  "referenceNumber": "BPC/2024/INV-0312",
+  "lineItems": [
+    {
+      "description": "IT Strategy Consulting - Senior Consultant (5 days)",
+      "quantity": 5,
+      "unitPrice": 850.00,
+      "amount": 4250.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Workshop facilitation",
+      "quantity": 1,
+      "unitPrice": 1200.00,
+      "amount": 1200.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Platform Migration Fee",
+      "quantity": 1,
+      "unitPrice": 4500.00,
+      "amount": 4500.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 9950.00,
+  "vatAmount": 1990.00,
+  "total": 11940.00,
+  "currency": "GBP",
+  "status": "unpaid",
+  "category": "consulting",
+  "metadata": {
+    "story": "new-line-item-triggered",
+    "newLineItem": "Platform Migration Fee",
+    "note": "Platform Migration Fee has never appeared on any previous Brightpath invoice"
+  }
+}

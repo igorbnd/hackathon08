@@ -1,0 +1,33 @@
+{
+  "invoiceId": "INV-BPC-2023-0901",
+  "vendorId": "brightpath-consulting",
+  "vendorName": "Brightpath Consulting Group",
+  "issueDate": "2023-09-28",
+  "dueDate": "2023-10-28",
+  "referenceNumber": "BPC/2023/INV-0289",
+  "lineItems": [
+    {
+      "description": "IT Strategy Consulting - Senior Consultant (3 days)",
+      "quantity": 3,
+      "unitPrice": 850.00,
+      "amount": 2550.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Technical architecture review",
+      "quantity": 1,
+      "unitPrice": 1500.00,
+      "amount": 1500.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 4050.00,
+  "vatAmount": 810.00,
+  "total": 4860.00,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "consulting",
+  "metadata": {
+    "story": "new-line-item-baseline"
+  }
+}

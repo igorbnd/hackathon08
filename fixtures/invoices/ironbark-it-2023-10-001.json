@@ -1,0 +1,38 @@
+{
+  "invoiceId": "INV-IBI-2023-1001",
+  "vendorId": "ironbark-it",
+  "vendorName": "Ironbark IT Services",
+  "issueDate": "2023-10-15",
+  "dueDate": "2023-11-14",
+  "referenceNumber": "IBI/SVC/2023-Q4/078",
+  "lineItems": [
+    {
+      "description": "Managed IT Support - Quarterly retainer",
+      "quantity": 1,
+      "unitPrice": 750.00,
+      "amount": 750.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Network monitoring (24/7)",
+      "quantity": 1,
+      "unitPrice": 250.00,
+      "amount": 250.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Workstation setup - new starter",
+      "quantity": 2,
+      "unitPrice": 145.00,
+      "amount": 290.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 1290.00,
+  "vatAmount": 258.00,
+  "total": 1548.00,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "it-maintenance",
+  "metadata": {}
+}
