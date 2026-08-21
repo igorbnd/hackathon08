@@ -18,8 +18,32 @@
 
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import sharp from "sharp";
 import { fromPath } from "pdf2pic";
+
+// ---------- Preflight check ----------
+
+/**
+ * Verify that GraphicsMagick is installed and available on PATH.
+ * pdf2pic uses node-gm which shells out to the `gm` binary.
+ */
+function checkGraphicsMagick(): void {
+  try {
+    execSync("gm version", { stdio: "ignore" });
+  } catch {
+    console.error(
+      "ERROR: GraphicsMagick is not installed or not found on PATH.\n" +
+        "pdf2pic requires GraphicsMagick to rasterize PDFs.\n\n" +
+        "Install it:\n" +
+        "  macOS:        brew install graphicsmagick\n" +
+        "  Debian/Ubuntu: sudo apt-get install graphicsmagick\n"
+    );
+    process.exit(1);
+  }
+}
+
+checkGraphicsMagick();
 
 const FIXTURES_DIR = join(import.meta.dirname ?? ".", "..");
 const PDFS_DIR = join(FIXTURES_DIR, "pdfs");

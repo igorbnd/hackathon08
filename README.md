@@ -35,6 +35,16 @@ npm run generate-pdfs
 
 ### Generating imperfect scans
 
+**Prerequisites:** The scan generator uses `pdf2pic` which requires GraphicsMagick installed at the OS level.
+
+```bash
+# macOS
+brew install graphicsmagick
+
+# Debian/Ubuntu
+sudo apt-get install graphicsmagick
+```
+
 Requires PDFs to be generated first:
 
 ```bash
