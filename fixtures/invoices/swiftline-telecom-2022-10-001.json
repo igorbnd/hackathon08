@@ -1,0 +1,31 @@
+{
+  "invoiceId": "INV-SLT-2022-1001",
+  "vendorId": "swiftline-telecom",
+  "vendorName": "Swiftline Telecom",
+  "issueDate": "2022-10-01",
+  "dueDate": "2022-10-15",
+  "referenceNumber": "SLT/MOB/2022-10/0134",
+  "lineItems": [
+    {
+      "description": "Business Mobile Plan - Unlimited (3 lines)",
+      "quantity": 3,
+      "unitPrice": 32.00,
+      "amount": 96.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Mobile data bolt-on 20GB",
+      "quantity": 1,
+      "unitPrice": 8.00,
+      "amount": 8.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 104.00,
+  "vatAmount": 20.80,
+  "total": 124.80,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "telecom",
+  "metadata": {}
+}
