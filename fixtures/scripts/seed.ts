@@ -192,7 +192,11 @@ async function uploadInvoiceFiles(userId: string): Promise<void> {
   for (const file of scanFiles) {
     if (extname(file) !== ".png") continue;
 
-    const invoiceId = file.replace(".png", "");
+    // Strip the degradation suffix (e.g., "-skewed", "-low-contrast") so the
+    // S3 key maps to the same invoice path as the corresponding PDF.
+    const invoiceId = file
+      .replace(".png", "")
+      .replace(/-(skewed|low-contrast|phone-photo|cropped)$/, "");
     const s3Key = `users/${userId}/invoices/${invoiceId}/original.png`;
     const body = await readFile(join(SCANS_DIR, file));
 
