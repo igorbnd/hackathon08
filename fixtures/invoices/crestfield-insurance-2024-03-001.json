@@ -1,0 +1,41 @@
+{
+  "invoiceId": "INV-CFI-2024-0301",
+  "vendorId": "crestfield-insurance",
+  "vendorName": "Crestfield Insurance Services",
+  "issueDate": "2024-03-01",
+  "dueDate": "2024-03-15",
+  "referenceNumber": "CFI/REN/2024-0912A",
+  "lineItems": [
+    {
+      "description": "Professional Indemnity Insurance - Annual Premium",
+      "quantity": 1,
+      "unitPrice": 1525.00,
+      "amount": 1525.00,
+      "vatRate": 0
+    },
+    {
+      "description": "Public Liability Insurance - Annual Premium",
+      "quantity": 1,
+      "unitPrice": 680.00,
+      "amount": 680.00,
+      "vatRate": 0
+    },
+    {
+      "description": "Insurance Premium Tax",
+      "quantity": 1,
+      "unitPrice": 264.60,
+      "amount": 264.60,
+      "vatRate": 0
+    }
+  ],
+  "subtotal": 2469.60,
+  "vatAmount": 0.00,
+  "total": 2469.60,
+  "currency": "GBP",
+  "status": "unpaid",
+  "category": "insurance",
+  "metadata": {
+    "policyNumber": "CFI-PI-2024-0912",
+    "coverPeriod": "2024-04-01 to 2025-03-31"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "invoiceId": "INV-PIN-2023-0302",
+  "vendorId": "pinnacle-office",
+  "vendorName": "Pinnacle Office Supplies",
+  "issueDate": "2023-03-14",
+  "dueDate": "2023-04-14",
+  "referenceNumber": "POS/INV/2023-0851",
+  "lineItems": [
+    {
+      "description": "Ergonomic Desk Chair - Model X200",
+      "quantity": 4,
+      "unitPrice": 289.00,
+      "amount": 1156.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Standing Desk Converter - Adjustable",
+      "quantity": 4,
+      "unitPrice": 175.00,
+      "amount": 700.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Delivery and assembly",
+      "quantity": 1,
+      "unitPrice": 85.00,
+      "amount": 85.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 1941.00,
+  "vatAmount": 388.20,
+  "total": 2329.20,
+  "currency": "GBP",
+  "status": "unpaid",
+  "category": "office-supplies",
+  "metadata": {
+    "story": "duplicate-invoice-copy",
+    "duplicateOf": "INV-PIN-2023-0301",
+    "note": "Same line items, amounts and date but different reference number"
+  }
+}

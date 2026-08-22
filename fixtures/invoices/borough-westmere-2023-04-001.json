@@ -1,0 +1,28 @@
+{
+  "invoiceId": "INV-WBC-2023-0401",
+  "vendorId": "borough-westmere",
+  "vendorName": "Borough of Westmere Council",
+  "issueDate": "2023-04-01",
+  "dueDate": "2023-04-28",
+  "referenceNumber": "WBC/CT/2023-24/74521903",
+  "lineItems": [
+    {
+      "description": "Business Rates 2023-24 - Annual charge",
+      "quantity": 1,
+      "unitPrice": 4280.00,
+      "amount": 4280.00,
+      "vatRate": 0
+    }
+  ],
+  "subtotal": 4280.00,
+  "vatAmount": 0.00,
+  "total": 4280.00,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "council-tax",
+  "metadata": {
+    "rateableValue": 12500,
+    "financialYear": "2023-24",
+    "propertyRef": "WBC-BR-00452"
+  }
+}

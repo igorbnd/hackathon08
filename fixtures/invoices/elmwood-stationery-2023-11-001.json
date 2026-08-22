@@ -1,0 +1,40 @@
+{
+  "invoiceId": "INV-ELM-2023-1101",
+  "vendorId": "elmwood-stationery",
+  "vendorName": "Elmwood Stationery Co",
+  "issueDate": "2023-11-08",
+  "dueDate": "2023-12-08",
+  "referenceNumber": "ELM/23/11-001",
+  "lineItems": [
+    {
+      "description": "A4 ruled notebooks (pack of 10)",
+      "quantity": 3,
+      "unitPrice": 24.00,
+      "amount": 72.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Lever arch files (box of 20)",
+      "quantity": 2,
+      "unitPrice": 34.00,
+      "amount": 68.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Document wallets - A4 (pack of 25)",
+      "quantity": 4,
+      "unitPrice": 11.20,
+      "amount": 44.80,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 184.80,
+  "vatAmount": 36.96,
+  "total": 221.76,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "stationery",
+  "metadata": {
+    "story": "legitimate-pay"
+  }
+}

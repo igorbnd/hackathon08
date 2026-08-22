@@ -1,0 +1,40 @@
+{
+  "invoiceId": "INV-ELM-2023-0501",
+  "vendorId": "elmwood-stationery",
+  "vendorName": "Elmwood Stationery Co",
+  "issueDate": "2023-05-18",
+  "dueDate": "2023-06-18",
+  "referenceNumber": "ELM/23/05-001",
+  "lineItems": [
+    {
+      "description": "Premium ballpoint pens (box of 50)",
+      "quantity": 3,
+      "unitPrice": 18.50,
+      "amount": 55.50,
+      "vatRate": 20
+    },
+    {
+      "description": "A4 ruled notebooks (pack of 10)",
+      "quantity": 5,
+      "unitPrice": 24.00,
+      "amount": 120.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Sticky notes - assorted (pack of 12)",
+      "quantity": 4,
+      "unitPrice": 6.75,
+      "amount": 27.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 202.50,
+  "vatAmount": 40.50,
+  "total": 243.00,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "stationery",
+  "metadata": {
+    "story": "legitimate-pay"
+  }
+}

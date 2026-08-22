@@ -1,0 +1,38 @@
+{
+  "invoiceId": "INV-IBI-2024-0101",
+  "vendorId": "ironbark-it",
+  "vendorName": "Ironbark IT Services",
+  "issueDate": "2024-01-15",
+  "dueDate": "2024-02-14",
+  "referenceNumber": "IBI/SVC/2024-Q1/078",
+  "lineItems": [
+    {
+      "description": "Managed IT Support - Quarterly retainer",
+      "quantity": 1,
+      "unitPrice": 775.00,
+      "amount": 775.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Network monitoring (24/7)",
+      "quantity": 1,
+      "unitPrice": 250.00,
+      "amount": 250.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Security audit - annual review",
+      "quantity": 1,
+      "unitPrice": 550.00,
+      "amount": 550.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 1575.00,
+  "vatAmount": 315.00,
+  "total": 1890.00,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "it-maintenance",
+  "metadata": {}
+}

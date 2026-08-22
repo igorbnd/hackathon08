@@ -1,0 +1,40 @@
+{
+  "invoiceId": "INV-NXW-2024-0301",
+  "vendorId": "nexwave-fibre",
+  "vendorName": "Nexwave Fibre Ltd",
+  "issueDate": "2024-03-05",
+  "dueDate": "2024-03-20",
+  "referenceNumber": "NXW/2024/00312",
+  "lineItems": [
+    {
+      "description": "Fibre Unlimited 80 - Monthly subscription",
+      "quantity": 1,
+      "unitPrice": 41.29,
+      "amount": 41.29,
+      "vatRate": 20
+    },
+    {
+      "description": "Line rental",
+      "quantity": 1,
+      "unitPrice": 12.00,
+      "amount": 12.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 53.29,
+  "vatAmount": 10.66,
+  "total": 63.95,
+  "currency": "GBP",
+  "status": "unpaid",
+  "category": "broadband",
+  "metadata": {
+    "contractStartDate": "2022-01-15",
+    "contractEndDate": "2024-01-14",
+    "priceIncreasePercent": 18,
+    "priceIncreaseAppliedTo": "subscription-only",
+    "previousSubscriptionPrice": 34.99,
+    "previousTotal": 56.39,
+    "noticeSent": false,
+    "story": "price-rise-triggered"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "invoiceId": "INV-ELM-2024-0301",
+  "vendorId": "elmwood-stationery",
+  "vendorName": "Elmwood Stationery Co",
+  "issueDate": "2024-03-12",
+  "dueDate": "2024-04-12",
+  "referenceNumber": "ELM/24/03-001",
+  "lineItems": [
+    {
+      "description": "Premium ballpoint pens (box of 50)",
+      "quantity": 2,
+      "unitPrice": 18.50,
+      "amount": 37.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Highlighters - assorted (pack of 8)",
+      "quantity": 6,
+      "unitPrice": 7.25,
+      "amount": 43.50,
+      "vatRate": 20
+    },
+    {
+      "description": "Sticky notes - assorted (pack of 12)",
+      "quantity": 3,
+      "unitPrice": 6.75,
+      "amount": 20.25,
+      "vatRate": 20
+    },
+    {
+      "description": "Desk tidy organiser",
+      "quantity": 4,
+      "unitPrice": 12.99,
+      "amount": 51.96,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 152.71,
+  "vatAmount": 30.54,
+  "total": 183.25,
+  "currency": "GBP",
+  "status": "unpaid",
+  "category": "stationery",
+  "metadata": {
+    "story": "legitimate-pay"
+  }
+}

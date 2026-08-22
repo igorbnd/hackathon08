@@ -1,0 +1,29 @@
+{
+  "invoiceId": "INV-CDP-2023-0701",
+  "vendorId": "clouddeck-pro",
+  "vendorName": "CloudDeck Pro Ltd",
+  "issueDate": "2023-07-01",
+  "dueDate": "2023-07-15",
+  "referenceNumber": "CDP-2023-07-LIC-A",
+  "lineItems": [
+    {
+      "description": "CloudDeck Pro Team - Licence A (10 seats)",
+      "quantity": 1,
+      "unitPrice": 199.00,
+      "amount": 199.00,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 199.00,
+  "vatAmount": 39.80,
+  "total": 238.80,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "saas-subscription",
+  "metadata": {
+    "licenceId": "LIC-A-0042",
+    "seats": 10,
+    "billingCycle": "monthly",
+    "story": "overlapping-licence-A"
+  }
+}

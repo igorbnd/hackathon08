@@ -1,0 +1,38 @@
+{
+  "invoiceId": "INV-SLT-2023-0701",
+  "vendorId": "swiftline-telecom",
+  "vendorName": "Swiftline Telecom",
+  "issueDate": "2023-07-01",
+  "dueDate": "2023-07-15",
+  "referenceNumber": "SLT/MOB/2023-07/0156",
+  "lineItems": [
+    {
+      "description": "Business Mobile Plan - Unlimited (3 lines)",
+      "quantity": 3,
+      "unitPrice": 32.00,
+      "amount": 96.00,
+      "vatRate": 20
+    },
+    {
+      "description": "Mobile data bolt-on 20GB",
+      "quantity": 1,
+      "unitPrice": 8.00,
+      "amount": 8.00,
+      "vatRate": 20
+    },
+    {
+      "description": "International calls - July",
+      "quantity": 1,
+      "unitPrice": 14.50,
+      "amount": 14.50,
+      "vatRate": 20
+    }
+  ],
+  "subtotal": 118.50,
+  "vatAmount": 23.70,
+  "total": 142.20,
+  "currency": "GBP",
+  "status": "paid",
+  "category": "telecom",
+  "metadata": {}
+}
