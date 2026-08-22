@@ -63,3 +63,6 @@ sample-invoices/private/
 # AWS
 .aws-sam/
 samconfig.toml
+
+# Planner task state (not part of the project)
+.agents/
