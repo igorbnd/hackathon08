@@ -144,6 +144,9 @@ function getFileExtension(filename: string | undefined): string {
   return 'pdf';
 }
 
+// Maximum upload size: 5MB (Textract synchronous API limit)
+const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -160,6 +163,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 
   // Authenticate
+  // KNOWN LIMITATION (demo): JWT is decoded but not cryptographically verified.
+  // In production, use aws-jwt-verify to validate against Cognito JWKS.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const claims = authenticateRequest(event as any);
   if (!claims) {
@@ -178,25 +183,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return await handleUpload(event, userId, logger);
     }
 
-    // Route: POST /invoices/{id}/process
-    if (method === 'POST' && path.includes('/process')) {
-      const invoiceId = extractPathParam(path, '/invoices');
-      if (!invoiceId || invoiceId === 'process') {
+    // Route: POST /invoices/{id}/process (anchored regex to avoid false matches)
+    const processMatch = path.match(/\/invoices\/([^/]+)\/process$/);
+    if (method === 'POST' && processMatch) {
+      const invoiceId = processMatch[1];
+      if (!invoiceId) {
         return error('Missing invoice ID', 400) as APIGatewayProxyResult;
       }
-      // Remove /process suffix if captured
-      const cleanId = invoiceId.replace('/process', '');
-      return await handleProcess(cleanId, userId, logger);
+      return await handleProcess(invoiceId, userId, logger);
     }
 
-    // Route: GET /invoices/{id}/status
-    if (method === 'GET' && path.includes('/status')) {
-      const invoiceId = extractPathParam(path, '/invoices');
-      if (!invoiceId || invoiceId === 'status') {
+    // Route: GET /invoices/{id}/status (anchored regex to avoid false matches)
+    const statusMatch = path.match(/\/invoices\/([^/]+)\/status$/);
+    if (method === 'GET' && statusMatch) {
+      const invoiceId = statusMatch[1];
+      if (!invoiceId) {
         return error('Missing invoice ID', 400) as APIGatewayProxyResult;
       }
-      const cleanId = invoiceId.replace('/status', '');
-      return await handleGetStatus(cleanId, userId);
+      return await handleGetStatus(invoiceId, userId);
     }
 
     // Route: DELETE /invoices/{id}
@@ -225,7 +229,16 @@ async function handleUpload(
   const body = event.body ? JSON.parse(event.body) : {};
   const filename = body.filename as string | undefined;
   const contentType = body.contentType as string | undefined;
+  const fileSize = body.size as number | undefined;
   const ext = getFileExtension(filename);
+
+  // Validate file size does not exceed Textract sync limit (5MB)
+  if (fileSize !== undefined && fileSize > MAX_UPLOAD_SIZE_BYTES) {
+    return error(
+      `File size (${Math.round(fileSize / 1024 / 1024 * 100) / 100} MB) exceeds the maximum allowed size of 5 MB.`,
+      400,
+    ) as APIGatewayProxyResult;
+  }
 
   // Generate unique invoice ID
   const invoiceId = randomUUID();
@@ -235,11 +248,12 @@ async function handleUpload(
 
   logger.info('Generating presigned upload URL', { invoiceId, s3Key });
 
-  // Generate presigned PUT URL
+  // Generate presigned PUT URL with Content-Length condition to enforce 5MB limit
   const uploadUrl = await generatePresignedUploadUrl({
     key: s3Key,
     contentType: contentType ?? `application/${ext === 'pdf' ? 'pdf' : ext}`,
     expiresIn: 600, // 10 minutes
+    maxContentLength: MAX_UPLOAD_SIZE_BYTES,
   });
 
   // Store initial status record
@@ -266,6 +280,11 @@ async function handleUpload(
 }
 
 // ─── Process Endpoint ───────────────────────────────────────────────────────
+
+// KNOWN LIMITATION (demo): The pipeline runs synchronously (Textract -> Bedrock -> DynamoDB)
+// within a single Lambda invocation. API Gateway has a 29s integration timeout, and Textract
+// can take 15-40s for multi-page PDFs. In production, use Step Functions or S3-event-triggered
+// async processing so the client only polls for status rather than holding a connection open.
 
 async function handleProcess(
   invoiceId: string,

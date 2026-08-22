@@ -42,8 +42,9 @@ function extractBearerToken(authHeader: string | undefined): string | null {
  * Authenticate request by extracting and validating JWT from Authorization header.
  * Returns user claims (userId, email) on success.
  *
- * In local dev mode (STAGE=local), supports a simplified decode without signature verification.
- * In production, the JWT should be verified against Cognito JWKS.
+ * KNOWN LIMITATION (demo): This performs base64 decode only, without cryptographic
+ * signature verification. In production, use aws-jwt-verify to validate the JWT
+ * against Cognito JWKS (verifying iss, aud, exp, and signature).
  */
 export function authenticateRequest(
   event: APIGatewayProxyEventV2,

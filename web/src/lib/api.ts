@@ -1,12 +1,68 @@
 /**
  * Typed API client for InvoiceIQ backend.
  * Attaches Authorization Bearer token from localStorage to all requests.
+ *
+ * KNOWN LIMITATIONS (demo):
+ * - Tokens are stored in localStorage, which is vulnerable to XSS.
+ *   In production, use httpOnly cookies or a backend-for-frontend pattern.
+ * - JWT is decoded but not cryptographically verified on the backend.
+ *   In production, use aws-jwt-verify against Cognito JWKS.
  */
 
 const API_BASE = '/api';
 
+/** Flag to prevent concurrent refresh attempts */
+let isRefreshing = false;
+let refreshPromise: Promise<void> | null = null;
+
 interface FetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
+  _isRetry?: boolean;
+}
+
+/**
+ * Attempt to refresh the access token using the stored refresh token.
+ * On success, stores new tokens. On failure, clears tokens and redirects to login.
+ */
+async function attemptTokenRefresh(): Promise<void> {
+  const currentRefreshToken = localStorage.getItem('refreshToken');
+  if (!currentRefreshToken) {
+    clearTokensAndRedirect();
+    throw new Error('No refresh token available');
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: currentRefreshToken }),
+    });
+
+    if (!response.ok) {
+      clearTokensAndRedirect();
+      throw new Error('Token refresh failed');
+    }
+
+    const tokens = await response.json();
+    localStorage.setItem('accessToken', tokens.accessToken);
+    localStorage.setItem('idToken', tokens.idToken);
+    if (tokens.refreshToken) {
+      localStorage.setItem('refreshToken', tokens.refreshToken);
+    }
+  } catch {
+    clearTokensAndRedirect();
+    throw new Error('Token refresh failed');
+  }
+}
+
+function clearTokensAndRedirect(): void {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('idToken');
+  localStorage.removeItem('refreshToken');
+  // Only redirect if not already on auth pages
+  if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/signup')) {
+    window.location.href = '/login';
+  }
 }
 
 async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
@@ -20,11 +76,34 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const { _isRetry, ...fetchOptions } = options;
+
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+
+  // Handle 401 - attempt token refresh and retry (once)
+  if (response.status === 401 && !_isRetry && !path.includes('/auth/')) {
+    // Prevent concurrent refresh attempts
+    if (!isRefreshing) {
+      isRefreshing = true;
+      refreshPromise = attemptTokenRefresh().finally(() => {
+        isRefreshing = false;
+        refreshPromise = null;
+      });
+    }
+
+    try {
+      await refreshPromise;
+      // Retry the original request with the new token
+      return apiFetch<T>(path, { ...options, _isRetry: true });
+    } catch {
+      // Refresh failed - error is already handled (redirect to login)
+      throw new Error('Session expired. Please sign in again.');
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: response.statusText }));
@@ -85,7 +164,7 @@ export interface GetInvoicesParams {
 export interface InvoiceListResponse {
   invoices: Invoice[];
   nextCursor?: string;
-  total: number;
+  count: number;
 }
 
 export interface Invoice {

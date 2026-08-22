@@ -68,7 +68,7 @@ export function DashboardPage() {
 
       const response = await getInvoices(params);
       setInvoices(response.invoices);
-      setTotal(response.total);
+      setTotal(response.count);
       setNextCursor(response.nextCursor);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load invoices');

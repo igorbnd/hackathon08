@@ -342,6 +342,11 @@ async function handleDeleteAccount(
   event: APIGatewayProxyEvent,
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
+  // KNOWN LIMITATION (demo): Deletion order is data-first, then Cognito user.
+  // If Cognito deletion fails after data is removed, the user can still authenticate
+  // but has no data. In production, reverse the order (delete Cognito first) or use
+  // a transaction log for reliable cleanup.
+
   // Authenticate user
   const claims = authenticateRequest(event as any);
   if (!claims) {

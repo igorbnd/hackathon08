@@ -7,6 +7,7 @@ import {
   getItem,
   queryItems,
   queryByGSI,
+  updateItem,
 } from '../../lib/dynamodb.js';
 import { invokeModel } from '../../lib/bedrock.js';
 import { getUserIdFromRequest } from '../../lib/auth-middleware.js';
@@ -138,10 +139,12 @@ async function handleListInvoices(
     ? Buffer.from(JSON.stringify(lastKey)).toString('base64')
     : null;
 
+  // NOTE: `count` is the number of items in this page, not a true total across all pages.
+  // In production, a separate DynamoDB Select:'COUNT' query or counter item would provide the true total.
   return success({
     invoices: filteredItems,
     nextCursor,
-    total: filteredItems.length,
+    count: filteredItems.length,
   }) as APIGatewayProxyResult;
 }
 
@@ -203,8 +206,40 @@ async function handleGetInvoice(
     // Compute deltas between current and previous invoices
     deltas = computeDeltas(invoice, history as unknown as Invoice[]);
 
-    // Generate AI recommendation
-    recommendation = await generateRecommendation(invoice, history as unknown as Invoice[], logger);
+    // Use cached recommendation if available and invoice hasn't been updated since
+    const cachedRecommendation = item.cachedRecommendation as RecommendationResult | undefined;
+    const recommendationGeneratedAt = item.recommendationGeneratedAt as string | undefined;
+    const invoiceUpdatedAt = (item.updatedAt as string) ?? '';
+
+    if (cachedRecommendation && recommendationGeneratedAt && recommendationGeneratedAt >= invoiceUpdatedAt) {
+      recommendation = cachedRecommendation;
+    } else {
+      // Generate AI recommendation and cache it
+      recommendation = await generateRecommendation(invoice, history as unknown as Invoice[], logger);
+
+      // Persist the recommendation in DynamoDB for subsequent requests
+      try {
+        await updateItem(
+          buildPK(userId),
+          buildSK(invoiceId),
+          'SET #cachedRec = :rec, #recGeneratedAt = :genAt',
+          {
+            ':rec': recommendation as unknown as Record<string, unknown>,
+            ':genAt': new Date().toISOString(),
+          },
+          {
+            '#cachedRec': 'cachedRecommendation',
+            '#recGeneratedAt': 'recommendationGeneratedAt',
+          },
+        );
+      } catch (cacheErr) {
+        // Non-critical: log and continue even if caching fails
+        logger.warn('Failed to cache recommendation', {
+          invoiceId,
+          error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
+        });
+      }
+    }
   }
 
   return success({
@@ -385,7 +420,9 @@ async function handleSubscriptionAnalysis(
 ): Promise<APIGatewayProxyResult> {
   logger.info('Running subscription analysis', { userId });
 
-  // Query ALL user invoices (paginate through all results)
+  // KNOWN LIMITATION (demo): Loads all user invoices into memory with no upper bound.
+  // In production, implement streaming aggregation or cap at a maximum (e.g., 5000 items)
+  // to stay within Lambda memory limits for power users.
   const allInvoices: Record<string, any>[] = [];
   let lastKey: Record<string, any> | undefined;
 
