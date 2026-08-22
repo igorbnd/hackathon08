@@ -44,7 +44,7 @@ export class ComputeStack extends cdk.Stack {
     // Auth Lambda
     this.authFunction = new lambdaNode.NodejsFunction(this, 'AuthFunction', {
       functionName: `invoiceiq-${stage}-auth`,
-      entry: '../api/src/handlers/auth.ts',
+      entry: '../api/src/handlers/auth/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 256,
@@ -76,7 +76,7 @@ export class ComputeStack extends cdk.Stack {
     // Ingestion Lambda
     this.ingestionFunction = new lambdaNode.NodejsFunction(this, 'IngestionFunction', {
       functionName: `invoiceiq-${stage}-ingestion`,
-      entry: '../api/src/handlers/ingestion.ts',
+      entry: '../api/src/handlers/ingestion/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 512,
@@ -130,7 +130,7 @@ export class ComputeStack extends cdk.Stack {
     // Query Lambda
     this.queryFunction = new lambdaNode.NodejsFunction(this, 'QueryFunction', {
       functionName: `invoiceiq-${stage}-query`,
-      entry: '../api/src/handlers/query.ts',
+      entry: '../api/src/handlers/query/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 256,
