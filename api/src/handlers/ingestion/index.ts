@@ -1,8 +1,515 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { randomUUID } from 'crypto';
+import {
+  S3Client,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from '@aws-sdk/client-s3';
+import { authenticateRequest } from '../../lib/auth-middleware.js';
+import { success, error, corsPreflightResponse } from '../../lib/response.js';
+import { createLogger } from '../../lib/logger.js';
+import { generatePresignedUploadUrl, DOCUMENTS_BUCKET } from '../../lib/s3.js';
+import { analyzeExpense } from '../../lib/textract.js';
+import { invokeModel } from '../../lib/bedrock.js';
+import { NORMALISATION_PROMPT } from '../../lib/prompts.js';
+import {
+  putItem,
+  getItem,
+  deleteItem,
+  buildPK,
+  buildSK,
+  buildGSI1PK,
+  buildGSI1SK,
+  buildGSI2PK,
+  buildGSI2SK,
+} from '../../lib/dynamodb.js';
+
+const s3Client = new S3Client({});
+
+// ─── Status Tracking ────────────────────────────────────────────────────────
+
+type ProcessingStatus = 'queued' | 'extracting' | 'normalising' | 'analysing' | 'ready' | 'failed';
+
+function buildStatusSK(invoiceId: string): string {
+  return `STATUS#${invoiceId}`;
+}
+
+async function updateStatus(
+  userId: string,
+  invoiceId: string,
+  status: ProcessingStatus,
+  reason?: string,
+): Promise<void> {
+  await putItem({
+    item: {
+      PK: buildPK(userId),
+      SK: buildStatusSK(invoiceId),
+      status,
+      updatedAt: new Date().toISOString(),
+      ...(reason ? { reason } : {}),
+    },
+  });
+}
+
+// ─── Vendor Identity Resolution ─────────────────────────────────────────────
+
+/**
+ * Normalise vendor name to a lowercase kebab-case slug.
+ * Removes common business suffixes (Ltd, Inc, LLC, PLC, Corp, etc.),
+ * strips punctuation, and converts to kebab-case.
+ *
+ * Examples:
+ *   "Nexwave Fibre Ltd" -> "nexwave-fibre"
+ *   "ACME Corp."       -> "acme"
+ *   "O'Brien & Sons"   -> "obrien-sons"
+ */
+export function normaliseVendorName(name: string): string {
+  let slug = name.toLowerCase();
+
+  // Remove common business suffixes
+  const suffixes = [
+    '\\s+limited$',
+    '\\s+ltd\\.?$',
+    '\\s+inc\\.?$',
+    '\\s+llc\\.?$',
+    '\\s+plc\\.?$',
+    '\\s+corp\\.?$',
+    '\\s+corporation$',
+    '\\s+co\\.?$',
+    '\\s+company$',
+    '\\s+group$',
+    '\\s+holdings?$',
+    '\\s+services?$',
+    '\\s+solutions?$',
+    '\\s+pty\\.?$',
+    '\\s+gmbh$',
+    '\\s+ag$',
+  ];
+
+  for (const suffix of suffixes) {
+    slug = slug.replace(new RegExp(suffix, 'i'), '');
+  }
+
+  // Remove punctuation (keep alphanumeric and spaces)
+  slug = slug.replace(/[^a-z0-9\s]/g, '');
+
+  // Replace whitespace sequences with a single hyphen
+  slug = slug.replace(/\s+/g, '-');
+
+  // Remove leading/trailing hyphens
+  slug = slug.replace(/^-+|-+$/g, '');
+
+  return slug;
+}
+
+// ─── Low-Confidence Flagging ────────────────────────────────────────────────
+
+const CONFIDENCE_THRESHOLD = 0.8;
+
+/**
+ * Identify fields below the confidence threshold.
+ * Returns a map of field -> confidence for flagged fields.
+ */
+function flagLowConfidenceFields(
+  confidenceMap: Record<string, number>,
+): Record<string, number> {
+  const flagged: Record<string, number> = {};
+  for (const [field, confidence] of Object.entries(confidenceMap)) {
+    if (confidence < CONFIDENCE_THRESHOLD) {
+      flagged[field] = confidence;
+    }
+  }
+  return flagged;
+}
+
+// ─── Route Helpers ──────────────────────────────────────────────────────────
+
+function extractPathParam(path: string, prefix: string): string | null {
+  // Matches patterns like /invoices/{id}/process or /invoices/{id}
+  const regex = new RegExp(`${prefix}/([^/]+)(?:/.*)?$`);
+  const match = path.match(regex);
+  return match ? match[1] : null;
+}
+
+function getFileExtension(filename: string | undefined): string {
+  if (!filename) return 'pdf';
+  const parts = filename.split('.');
+  if (parts.length > 1) {
+    const ext = parts[parts.length - 1].toLowerCase();
+    // Only allow safe extensions
+    if (['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'tif'].includes(ext)) {
+      return ext;
+    }
+  }
+  return 'pdf';
+}
+
+// ─── Handler ────────────────────────────────────────────────────────────────
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Ingestion handler' }),
-  };
+  const logger = createLogger({
+    requestId: event.requestContext?.requestId ?? randomUUID(),
+  });
+
+  const method = event.httpMethod ?? event.requestContext?.httpMethod ?? '';
+  const path = event.path ?? event.rawPath ?? '';
+
+  // Handle CORS preflight
+  if (method === 'OPTIONS') {
+    return corsPreflightResponse() as APIGatewayProxyResult;
+  }
+
+  // Authenticate
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const claims = authenticateRequest(event as any);
+  if (!claims) {
+    // Allow demo user in local dev
+    if (process.env.STAGE !== 'local') {
+      return error('Unauthorized', 401) as APIGatewayProxyResult;
+    }
+  }
+
+  const userId = claims?.userId ?? 'demo-user-001';
+  logger.info('Ingestion request', { method, path, userId });
+
+  try {
+    // Route: POST /invoices/upload
+    if (method === 'POST' && path.endsWith('/upload')) {
+      return await handleUpload(event, userId, logger);
+    }
+
+    // Route: POST /invoices/{id}/process
+    if (method === 'POST' && path.includes('/process')) {
+      const invoiceId = extractPathParam(path, '/invoices');
+      if (!invoiceId || invoiceId === 'process') {
+        return error('Missing invoice ID', 400) as APIGatewayProxyResult;
+      }
+      // Remove /process suffix if captured
+      const cleanId = invoiceId.replace('/process', '');
+      return await handleProcess(cleanId, userId, logger);
+    }
+
+    // Route: GET /invoices/{id}/status
+    if (method === 'GET' && path.includes('/status')) {
+      const invoiceId = extractPathParam(path, '/invoices');
+      if (!invoiceId || invoiceId === 'status') {
+        return error('Missing invoice ID', 400) as APIGatewayProxyResult;
+      }
+      const cleanId = invoiceId.replace('/status', '');
+      return await handleGetStatus(cleanId, userId);
+    }
+
+    // Route: DELETE /invoices/{id}
+    if (method === 'DELETE') {
+      const invoiceId = extractPathParam(path, '/invoices');
+      if (!invoiceId) {
+        return error('Missing invoice ID', 400) as APIGatewayProxyResult;
+      }
+      return await handleDelete(invoiceId, userId, logger);
+    }
+
+    return error('Not found', 404) as APIGatewayProxyResult;
+  } catch (err) {
+    logger.error('Unhandled error in ingestion handler', err);
+    return error('Internal server error', 500) as APIGatewayProxyResult;
+  }
 };
+
+// ─── Upload Endpoint ────────────────────────────────────────────────────────
+
+async function handleUpload(
+  event: APIGatewayProxyEvent,
+  userId: string,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  const body = event.body ? JSON.parse(event.body) : {};
+  const filename = body.filename as string | undefined;
+  const contentType = body.contentType as string | undefined;
+  const ext = getFileExtension(filename);
+
+  // Generate unique invoice ID
+  const invoiceId = randomUUID();
+
+  // S3 key following project convention
+  const s3Key = `users/${userId}/invoices/${invoiceId}/original.${ext}`;
+
+  logger.info('Generating presigned upload URL', { invoiceId, s3Key });
+
+  // Generate presigned PUT URL
+  const uploadUrl = await generatePresignedUploadUrl({
+    key: s3Key,
+    contentType: contentType ?? `application/${ext === 'pdf' ? 'pdf' : ext}`,
+    expiresIn: 600, // 10 minutes
+  });
+
+  // Store initial status record
+  await updateStatus(userId, invoiceId, 'queued');
+
+  // Store a minimal invoice placeholder so we can track it
+  await putItem({
+    item: {
+      PK: buildPK(userId),
+      SK: buildSK(invoiceId),
+      invoiceId,
+      userId,
+      status: 'queued',
+      sourceDocument: {
+        s3Key,
+        mimeType: contentType ?? 'application/pdf',
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  });
+
+  return success({ uploadUrl, invoiceId }, 201) as APIGatewayProxyResult;
+}
+
+// ─── Process Endpoint ───────────────────────────────────────────────────────
+
+async function handleProcess(
+  invoiceId: string,
+  userId: string,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  logger.info('Starting invoice processing pipeline', { invoiceId, userId });
+
+  try {
+    // Retrieve the placeholder record to get S3 key
+    const existing = await getItem({
+      pk: buildPK(userId),
+      sk: buildSK(invoiceId),
+    });
+
+    if (!existing) {
+      return error('Invoice not found', 404) as APIGatewayProxyResult;
+    }
+
+    // Verify ownership
+    if (existing.userId && existing.userId !== userId) {
+      return error('Forbidden', 403) as APIGatewayProxyResult;
+    }
+
+    const sourceDoc = existing.sourceDocument as { s3Key: string; mimeType: string } | undefined;
+    if (!sourceDoc?.s3Key) {
+      return error('No source document found for this invoice', 400) as APIGatewayProxyResult;
+    }
+
+    // ── Step 1: Extracting ──────────────────────────────────────────────────
+    await updateStatus(userId, invoiceId, 'extracting');
+    logger.info('Calling Textract AnalyzeExpense', { invoiceId });
+
+    const expenseDocuments = await analyzeExpense({
+      bucket: DOCUMENTS_BUCKET,
+      key: sourceDoc.s3Key,
+    });
+
+    if (!expenseDocuments || expenseDocuments.length === 0) {
+      await updateStatus(userId, invoiceId, 'failed', 'Textract returned no expense documents');
+      return error('Textract extraction failed - no documents returned', 422) as APIGatewayProxyResult;
+    }
+
+    // ── Step 2: Normalising ─────────────────────────────────────────────────
+    await updateStatus(userId, invoiceId, 'normalising');
+    logger.info('Sending Textract output to Bedrock for normalisation', { invoiceId });
+
+    const textractOutput = JSON.stringify(expenseDocuments, null, 2);
+    const normalisationResponse = await invokeModel({
+      systemPrompt: NORMALISATION_PROMPT,
+      prompt: `Here is the Textract AnalyzeExpense output for invoice ID "${invoiceId}". Please normalise it into the canonical Invoice JSON format.\n\n${textractOutput}`,
+      maxTokens: 4096,
+      temperature: 0.1,
+    });
+
+    // Parse the normalised invoice from Bedrock response
+    let parsedResponse: { invoice: Record<string, unknown>; confidence: Record<string, number> };
+    try {
+      parsedResponse = JSON.parse(normalisationResponse.content);
+    } catch {
+      // Try to extract JSON from the response if it has extra text
+      const jsonMatch = normalisationResponse.content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        await updateStatus(userId, invoiceId, 'failed', 'Failed to parse Bedrock normalisation response');
+        return error('Normalisation failed - invalid response format', 422) as APIGatewayProxyResult;
+      }
+    }
+
+    const normalisedInvoice = parsedResponse.invoice ?? parsedResponse;
+    const confidenceMap = parsedResponse.confidence ?? {};
+
+    // ── Step 3: Analysing ───────────────────────────────────────────────────
+    await updateStatus(userId, invoiceId, 'analysing');
+    logger.info('Performing vendor resolution and confidence analysis', { invoiceId });
+
+    // Vendor identity resolution
+    const vendorName = (normalisedInvoice.vendorName as string) ?? '';
+    const vendorId = normaliseVendorName(vendorName);
+
+    // Low-confidence flagging
+    const lowConfidenceFields = flagLowConfidenceFields(confidenceMap);
+
+    // Build the canonical invoice record
+    const issueDate = (normalisedInvoice.issueDate as string) ?? new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString();
+
+    const canonicalRecord = {
+      // DynamoDB keys
+      PK: buildPK(userId),
+      SK: buildSK(invoiceId),
+      GSI1PK: buildGSI1PK(userId, vendorId),
+      GSI1SK: buildGSI1SK(issueDate),
+      GSI2PK: buildGSI2PK(userId),
+      GSI2SK: buildGSI2SK(issueDate, invoiceId),
+
+      // Invoice data
+      invoiceId,
+      userId,
+      vendorId,
+      vendorName: normalisedInvoice.vendorName ?? vendorName,
+      issueDate,
+      dueDate: normalisedInvoice.dueDate ?? '',
+      referenceNumber: normalisedInvoice.referenceNumber ?? '',
+      lineItems: normalisedInvoice.lineItems ?? [],
+      subtotal: normalisedInvoice.subtotal ?? 0,
+      vatAmount: normalisedInvoice.vatAmount ?? 0,
+      total: normalisedInvoice.total ?? 0,
+      currency: normalisedInvoice.currency ?? 'GBP',
+      status: normalisedInvoice.status ?? 'unpaid',
+      category: normalisedInvoice.category ?? 'uncategorised',
+      metadata: normalisedInvoice.metadata ?? {},
+
+      // Vendor details (optional)
+      vendor: normalisedInvoice.vendor ?? { name: vendorName, normalisedName: vendorId },
+
+      // Source document info
+      sourceDocument: sourceDoc,
+
+      // Extraction metadata
+      extraction: {
+        confidence: confidenceMap,
+        lowConfidenceFields,
+        model: 'anthropic.claude-3-haiku-20240307-v1:0',
+        version: '1.0',
+        extractedAt: now,
+      },
+
+      // Timestamps
+      createdAt: existing.createdAt ?? now,
+      updatedAt: now,
+      processedAt: now,
+    };
+
+    // ── Step 4: Store in DynamoDB ────────────────────────────────────────────
+    await putItem({ item: canonicalRecord });
+
+    // ── Step 5: Mark as ready ───────────────────────────────────────────────
+    await updateStatus(userId, invoiceId, 'ready');
+    logger.info('Invoice processing complete', {
+      invoiceId,
+      vendorId,
+      total: canonicalRecord.total as number,
+      lowConfidenceCount: Object.keys(lowConfidenceFields).length,
+    });
+
+    return success({
+      invoiceId,
+      status: 'ready',
+      vendorId,
+      vendorName: canonicalRecord.vendorName,
+      total: canonicalRecord.total,
+      currency: canonicalRecord.currency,
+      lowConfidenceFields: Object.keys(lowConfidenceFields),
+    }) as APIGatewayProxyResult;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error during processing';
+    logger.error('Invoice processing failed', err, { invoiceId });
+    await updateStatus(userId, invoiceId, 'failed', errorMessage);
+    return error(`Processing failed: ${errorMessage}`, 500) as APIGatewayProxyResult;
+  }
+}
+
+// ─── Get Status Endpoint ────────────────────────────────────────────────────
+
+async function handleGetStatus(
+  invoiceId: string,
+  userId: string,
+): Promise<APIGatewayProxyResult> {
+  const statusRecord = await getItem({
+    pk: buildPK(userId),
+    sk: buildStatusSK(invoiceId),
+  });
+
+  if (!statusRecord) {
+    return error('Status not found', 404) as APIGatewayProxyResult;
+  }
+
+  return success({
+    invoiceId,
+    status: statusRecord.status,
+    updatedAt: statusRecord.updatedAt,
+    ...(statusRecord.reason ? { reason: statusRecord.reason } : {}),
+  }) as APIGatewayProxyResult;
+}
+
+// ─── Delete Endpoint ────────────────────────────────────────────────────────
+
+async function handleDelete(
+  invoiceId: string,
+  userId: string,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  logger.info('Deleting invoice', { invoiceId, userId });
+
+  // Verify the invoice exists and belongs to the user
+  const existing = await getItem({
+    pk: buildPK(userId),
+    sk: buildSK(invoiceId),
+  });
+
+  if (!existing) {
+    return error('Invoice not found', 404) as APIGatewayProxyResult;
+  }
+
+  if (existing.userId && existing.userId !== userId) {
+    return error('Forbidden', 403) as APIGatewayProxyResult;
+  }
+
+  // Delete S3 objects under the invoice prefix
+  const s3Prefix = `users/${userId}/invoices/${invoiceId}/`;
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: DOCUMENTS_BUCKET,
+      Prefix: s3Prefix,
+    });
+    const listResponse = await s3Client.send(listCommand);
+
+    if (listResponse.Contents && listResponse.Contents.length > 0) {
+      const deleteCommand = new DeleteObjectsCommand({
+        Bucket: DOCUMENTS_BUCKET,
+        Delete: {
+          Objects: listResponse.Contents.map((obj) => ({ Key: obj.Key })),
+          Quiet: true,
+        },
+      });
+      await s3Client.send(deleteCommand);
+    }
+  } catch (s3Err) {
+    logger.warn('Failed to delete S3 objects', {
+      invoiceId,
+      error: s3Err instanceof Error ? s3Err.message : 'unknown',
+    });
+    // Continue with DynamoDB deletion even if S3 cleanup fails
+  }
+
+  // Delete the invoice record from DynamoDB
+  await deleteItem(buildPK(userId), buildSK(invoiceId));
+
+  // Delete the status record
+  await deleteItem(buildPK(userId), buildStatusSK(invoiceId));
+
+  logger.info('Invoice deleted successfully', { invoiceId });
+
+  return success({ message: 'Invoice deleted', invoiceId }) as APIGatewayProxyResult;
+}
