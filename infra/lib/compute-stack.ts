@@ -44,7 +44,7 @@ export class ComputeStack extends cdk.Stack {
     // Auth Lambda
     this.authFunction = new lambdaNode.NodejsFunction(this, 'AuthFunction', {
       functionName: `invoiceiq-${stage}-auth`,
-      entry: '../api/src/handlers/auth.ts',
+      entry: '../api/src/handlers/auth/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 256,
@@ -52,6 +52,9 @@ export class ComputeStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         TABLE_NAME: table.tableName,
+        DOCUMENTS_BUCKET: documentsBucket.bucketName,
+        USER_POOL_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-id`),
+        USER_POOL_CLIENT_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-client-id`),
         STAGE: stage,
       },
       deadLetterQueue: authDlq,
@@ -67,16 +70,40 @@ export class ComputeStack extends cdk.Stack {
           'dynamodb:PutItem',
           'dynamodb:GetItem',
           'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
           'dynamodb:Query',
         ],
         resources: [table.tableArn, `${table.tableArn}/index/*`],
       }),
     );
 
+    this.authFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'cognito-idp:SignUp',
+          'cognito-idp:InitiateAuth',
+          'cognito-idp:ConfirmSignUp',
+          'cognito-idp:ForgotPassword',
+          'cognito-idp:ConfirmForgotPassword',
+          'cognito-idp:GlobalSignOut',
+          'cognito-idp:AdminGetUser',
+          'cognito-idp:AdminDeleteUser',
+        ],
+        resources: [`arn:aws:cognito-idp:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:userpool/*`],
+      }),
+    );
+
+    this.authFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket', 's3:DeleteObject'],
+        resources: [documentsBucket.bucketArn, `${documentsBucket.bucketArn}/*`],
+      }),
+    );
+
     // Ingestion Lambda
     this.ingestionFunction = new lambdaNode.NodejsFunction(this, 'IngestionFunction', {
       functionName: `invoiceiq-${stage}-ingestion`,
-      entry: '../api/src/handlers/ingestion.ts',
+      entry: '../api/src/handlers/ingestion/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 512,
@@ -130,7 +157,7 @@ export class ComputeStack extends cdk.Stack {
     // Query Lambda
     this.queryFunction = new lambdaNode.NodejsFunction(this, 'QueryFunction', {
       functionName: `invoiceiq-${stage}-query`,
-      entry: '../api/src/handlers/query.ts',
+      entry: '../api/src/handlers/query/index.ts',
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       memorySize: 256,
