@@ -227,7 +227,7 @@ async function handleUpload(
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
   const body = event.body ? JSON.parse(event.body) : {};
-  const filename = body.filename as string | undefined;
+  const filename = body.fileName as string | undefined;
   const contentType = body.contentType as string | undefined;
   const fileSize = body.size as number | undefined;
   const ext = getFileExtension(filename);

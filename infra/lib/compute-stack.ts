@@ -89,7 +89,7 @@ export class ComputeStack extends cdk.Stack {
           'cognito-idp:AdminGetUser',
           'cognito-idp:AdminDeleteUser',
         ],
-        resources: ['*'],
+        resources: [`arn:aws:cognito-idp:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:userpool/*`],
       }),
     );
 

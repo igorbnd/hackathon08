@@ -24,16 +24,10 @@ export async function generatePresignedUploadUrl(
     Bucket: options.bucket ?? DOCUMENTS_BUCKET,
     Key: options.key,
     ContentType: options.contentType ?? 'application/pdf',
-    // Enforce maximum Content-Length if specified (prevents uploads exceeding Textract's 5MB limit)
-    ...(options.maxContentLength ? { ContentLength: options.maxContentLength } : {}),
   });
 
   return getSignedUrl(s3Client, command, {
     expiresIn: options.expiresIn ?? 300,
-    // Add a condition to restrict Content-Length in the presigned URL
-    ...(options.maxContentLength
-      ? { signableHeaders: new Set(['content-type', 'content-length']) }
-      : {}),
   });
 }
 
