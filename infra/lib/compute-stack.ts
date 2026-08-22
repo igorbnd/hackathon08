@@ -52,6 +52,9 @@ export class ComputeStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
       environment: {
         TABLE_NAME: table.tableName,
+        DOCUMENTS_BUCKET: documentsBucket.bucketName,
+        USER_POOL_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-id`),
+        USER_POOL_CLIENT_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-client-id`),
         STAGE: stage,
       },
       deadLetterQueue: authDlq,
@@ -67,9 +70,33 @@ export class ComputeStack extends cdk.Stack {
           'dynamodb:PutItem',
           'dynamodb:GetItem',
           'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
           'dynamodb:Query',
         ],
         resources: [table.tableArn, `${table.tableArn}/index/*`],
+      }),
+    );
+
+    this.authFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'cognito-idp:SignUp',
+          'cognito-idp:InitiateAuth',
+          'cognito-idp:ConfirmSignUp',
+          'cognito-idp:ForgotPassword',
+          'cognito-idp:ConfirmForgotPassword',
+          'cognito-idp:GlobalSignOut',
+          'cognito-idp:AdminGetUser',
+          'cognito-idp:AdminDeleteUser',
+        ],
+        resources: ['*'],
+      }),
+    );
+
+    this.authFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:ListBucket', 's3:DeleteObject'],
+        resources: [documentsBucket.bucketArn, `${documentsBucket.bucketArn}/*`],
       }),
     );
 
