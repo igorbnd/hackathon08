@@ -8,7 +8,8 @@
 
 | Dashboard | Invoice Detail & AI Recommendation |
 |---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Invoice Detail](docs/screenshots/invoice-detail.png) | ![AI Recommendation with Evidence and Historical Comparison](docs/screenshots/ai-recommendation.png)
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Invoice Detail](docs/screenshots/invoice-detail.png) |
+![AI Recommendation with Evidence and Historical Comparison](docs/screenshots/ai-recommendation.png)
 
 ---
 
