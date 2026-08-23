@@ -15,7 +15,9 @@
     "test": "vitest run --workspace vitest.workspace.ts",
     "test:watch": "vitest --workspace vitest.workspace.ts",
     "build": "npm run build --workspaces --if-present",
-    "seed": "npm run seed --prefix fixtures/scripts"
+    "seed": "npm run seed --prefix fixtures/scripts",
+    "deploy": "bash scripts/deploy.sh",
+    "destroy": "bash scripts/destroy.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.8.0",

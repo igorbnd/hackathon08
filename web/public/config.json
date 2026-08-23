@@ -1,0 +1,7 @@
+{
+  "apiBasePath": "/api",
+  "cognitoUserPoolId": "PLACEHOLDER",
+  "cognitoClientId": "PLACEHOLDER",
+  "cognitoRegion": "eu-west-2",
+  "appRegion": "eu-west-2"
+}

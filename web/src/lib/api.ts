@@ -9,7 +9,20 @@
  *   In production, use aws-jwt-verify against Cognito JWKS.
  */
 
-const API_BASE = '/api';
+import { getConfig } from './config';
+
+/**
+ * Resolve the API base path. Uses runtime config if loaded,
+ * otherwise falls back to '/api' (correct for both local dev and production).
+ */
+function getApiBase(): string {
+  try {
+    return getConfig().apiBasePath;
+  } catch {
+    // Config not yet loaded; use default
+    return '/api';
+  }
+}
 
 /** Flag to prevent concurrent refresh attempts */
 let isRefreshing = false;
@@ -32,7 +45,7 @@ async function attemptTokenRefresh(): Promise<void> {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
+    const response = await fetch(`${getApiBase()}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: currentRefreshToken }),
@@ -78,7 +91,7 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
 
   const { _isRetry, ...fetchOptions } = options;
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     ...fetchOptions,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,

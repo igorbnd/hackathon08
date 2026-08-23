@@ -14,6 +14,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
-      - run: cd infra && npx cdk synth
+      - name: CDK synth
+        run: cd infra && npx cdk synth
         env:
-          AWS_DEFAULT_REGION: eu-west-1
+          AWS_DEFAULT_REGION: eu-west-2

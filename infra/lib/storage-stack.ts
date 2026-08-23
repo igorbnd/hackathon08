@@ -20,12 +20,16 @@ export class StorageStack extends cdk.Stack {
 
     const { stage } = props;
 
+    // Removal policy: RETAIN for prod, DESTROY for dev
+    const dataRemovalPolicy =
+      stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
+
     // KMS key for document encryption
     this.documentsKey = new kms.Key(this, 'DocumentsKey', {
       alias: `invoiceiq-${stage}-documents-key`,
       description: 'KMS key for encrypting invoice documents',
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: dataRemovalPolicy,
     });
 
     // Documents S3 bucket with SSE-KMS encryption
@@ -49,7 +53,7 @@ export class StorageStack extends cdk.Stack {
           ],
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: dataRemovalPolicy,
     });
 
     // Bucket policy denying non-SSL requests
@@ -87,7 +91,7 @@ export class StorageStack extends cdk.Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: dataRemovalPolicy,
     });
 
     // GSI1
@@ -104,6 +108,17 @@ export class StorageStack extends cdk.Stack {
       partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Outputs used by deploy.sh and destroy.sh to locate the SPA bucket
+    new cdk.CfnOutput(this, 'SpaBucketName', {
+      value: this.spaBucket.bucketName,
+      description: 'SPA hosting bucket name',
+    });
+
+    new cdk.CfnOutput(this, 'DocumentsBucketName', {
+      value: this.documentsBucket.bucketName,
+      description: 'Documents storage bucket name',
     });
   }
 }
