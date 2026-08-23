@@ -29,7 +29,7 @@ InvoiceIQ extracts data from any uploaded document (PDF, photo, scan), normalise
 
 | | |
 |---|---|
-| **URL** | [https://invoiceiq.example.com](https://invoiceiq.example.com) |
+| **URL** | [https://invoiceiq.igorbond.com](https://invoiceiq.igorbond.com) |
 | **Username** | `demo@invoiceiq.example` |
 | **Password** | `Demo1234!Secure` |
 
@@ -346,47 +346,42 @@ npm run format
 
 ## Deployment
 
-### Prerequisites
+> **Full deployment runbook:** See [`docs/deployment.md`](docs/deployment.md) for the complete step-by-step guide including CDK bootstrap, DNS record setup, verification checklist, rollback, and teardown.
 
-- AWS account with CDK bootstrapped
-- AWS CLI configured with appropriate permissions
-- Node.js >= 20.0.0
+### Quick Overview
 
-### CDK Bootstrap (First Time Only)
+InvoiceIQ deploys across two AWS regions:
+- **us-east-1** - ACM certificate (DNS validated) + WAF WebACL (CloudFront scope)
+- **eu-west-2** - All application stacks (Storage, Network, Compute, Observability, Cost)
+
+The deployment requires two manual DNS records in Cloudflare at specific points during the deploy process. Both records must be set to **DNS only (grey cloud, proxy OFF)**. See the [full runbook](docs/deployment.md) for exact instructions.
+
+### Deploy
 
 ```bash
-cd infra
+# Bootstrap CDK in both regions (first time only)
 npx cdk bootstrap aws://ACCOUNT_ID/eu-west-2
-# If using WAF (deployed to us-east-1 for CloudFront):
 npx cdk bootstrap aws://ACCOUNT_ID/us-east-1
+
+# Deploy (will pause for DNS validation - see docs/deployment.md)
+./scripts/deploy.sh --stage prod
 ```
-
-### Deploy All Stacks
-
-```bash
-cd infra
-npx cdk deploy --all -c stage=prod -c alertEmail=your@email.com
-```
-
-This deploys the five stacks in dependency order:
-1. **StorageStack** - S3 buckets, DynamoDB table, KMS key
-2. **NetworkStack** - API Gateway, CloudFront, WAF
-3. **ComputeStack** - Lambda functions, IAM roles
-4. **ObservabilityStack** - CloudWatch alarms, SNS
-5. **CostStack** - AWS Budgets
 
 ### Seed Demo Data
-
-After deployment, seed the demo user and synthetic invoices:
 
 ```bash
 npm run seed
 ```
 
-This creates:
-- A Cognito user (`demo@invoiceiq.example` / `Demo1234!Secure`)
-- 50 synthetic invoices uploaded to S3
-- Corresponding DynamoDB records
+Creates a demo user and 50 synthetic invoices:
+- **Email:** `demo@invoiceiq.example`
+- **Password:** `Demo1234!Secure`
+
+### Teardown
+
+```bash
+./scripts/destroy.sh --stage prod
+```
 
 ### Preview Changes
 
