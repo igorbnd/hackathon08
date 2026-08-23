@@ -14,6 +14,9 @@
   },
   "context": {
     "stage": "dev",
+    "domainName": "invoiceiq.igorbond.com",
+    "callbackUrls": ["https://invoiceiq.igorbond.com", "http://localhost:5173"],
+    "logoutUrls": ["https://invoiceiq.igorbond.com", "http://localhost:5173"],
     "alertEmail": "",
     "textractDailyLimit": 100,
     "bedrockDailyLimit": 50
