@@ -314,31 +314,78 @@ async function handleProcess(
       return error('No source document found for this invoice', 400) as APIGatewayProxyResult;
     }
 
-    // ── Step 1: Extracting ──────────────────────────────────────────────────
+    // ── Step 1: Extracting (via Bedrock Vision - Textract alternative) ────
     await updateStatus(userId, invoiceId, 'extracting');
-    logger.info('Calling Textract AnalyzeExpense', { invoiceId });
+    logger.info('Fetching document from S3 for Bedrock vision extraction', { invoiceId });
 
-    const expenseDocuments = await analyzeExpense({
-      bucket: DOCUMENTS_BUCKET,
-      key: sourceDoc.s3Key,
-    });
+    // Fetch the document from S3 to send as base64 to Bedrock
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const s3GetResponse = await s3Client.send(new GetObjectCommand({
+      Bucket: DOCUMENTS_BUCKET,
+      Key: sourceDoc.s3Key,
+    }));
 
-    if (!expenseDocuments || expenseDocuments.length === 0) {
-      await updateStatus(userId, invoiceId, 'failed', 'Textract returned no expense documents');
-      return error('Textract extraction failed - no documents returned', 422) as APIGatewayProxyResult;
+    const docBytes = await s3GetResponse.Body?.transformToByteArray();
+    if (!docBytes || docBytes.length === 0) {
+      await updateStatus(userId, invoiceId, 'failed', 'Failed to fetch document from S3');
+      return error('Failed to fetch document from S3', 422) as APIGatewayProxyResult;
     }
 
-    // ── Step 2: Normalising ─────────────────────────────────────────────────
-    await updateStatus(userId, invoiceId, 'normalising');
-    logger.info('Sending Textract output to Bedrock for normalisation', { invoiceId });
+    const docBase64 = Buffer.from(docBytes).toString('base64');
+    const mediaType = sourceDoc.mimeType || 'application/pdf';
 
-    const textractOutput = JSON.stringify(expenseDocuments, null, 2);
-    const normalisationResponse = await invokeModel({
-      systemPrompt: NORMALISATION_PROMPT,
-      prompt: `Here is the Textract AnalyzeExpense output for invoice ID "${invoiceId}". Please normalise it into the canonical Invoice JSON format.\n\n${textractOutput}`,
-      maxTokens: 4096,
+    // ── Step 2: Normalising (Bedrock extracts + normalises in one step) ─────
+    await updateStatus(userId, invoiceId, 'normalising');
+    logger.info('Sending document to Bedrock for extraction and normalisation', { invoiceId });
+
+    // Use Bedrock with document as multimodal input
+    const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
+    const bedrockDirectClient = new BedrockRuntimeClient({});
+    const modelId = process.env.BEDROCK_MODEL_ID || 'eu.anthropic.claude-haiku-4-5-20251001-v1:0';
+
+    const bedrockBody = JSON.stringify({
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 4096,
       temperature: 0.1,
+      system: NORMALISATION_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: mediaType === 'application/pdf' ? 'document' : 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: docBase64,
+              },
+            },
+            {
+              type: 'text',
+              text: `Extract all data from this invoice document and normalise it into the canonical Invoice JSON format. The invoice ID is "${invoiceId}". Return ONLY valid JSON with no markdown formatting.`,
+            },
+          ],
+        },
+      ],
     });
+
+    const bedrockCommand = new InvokeModelCommand({
+      modelId,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: new TextEncoder().encode(bedrockBody),
+    });
+
+    const bedrockResponse = await bedrockDirectClient.send(bedrockCommand);
+    const responseBody = JSON.parse(new TextDecoder().decode(bedrockResponse.body));
+    const normalisationContent = responseBody.content?.[0]?.text ?? '';
+
+    if (!normalisationContent) {
+      await updateStatus(userId, invoiceId, 'failed', 'Bedrock returned empty response');
+      return error('Extraction failed - empty response from AI', 422) as APIGatewayProxyResult;
+    }
+
+    const normalisationResponse = { content: normalisationContent };
 
     // Parse the normalised invoice from Bedrock response
     let parsedResponse: { invoice: Record<string, unknown>; confidence: Record<string, number> };
