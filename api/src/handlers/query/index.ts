@@ -304,7 +304,12 @@ async function handleNaturalLanguageSearch(
 
   let parsedFilters: SearchFilters;
   try {
-    parsedFilters = JSON.parse(aiResponse.content);
+    // Strip markdown code fences if present (Claude often wraps JSON in ```json ... ```)
+    let content = aiResponse.content.trim();
+    if (content.startsWith('```')) {
+      content = content.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    parsedFilters = JSON.parse(content);
   } catch {
     logger.warn('Failed to parse AI search response', { content: aiResponse.content });
     return error('Failed to interpret search query', 422) as APIGatewayProxyResult;
@@ -566,7 +571,12 @@ async function generateRecommendation(
       temperature: 0.2,
     });
 
-    const parsed = JSON.parse(aiResponse.content);
+    // Strip markdown code fences if present
+    let recContent = aiResponse.content.trim();
+    if (recContent.startsWith('```')) {
+      recContent = recContent.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    const parsed = JSON.parse(recContent);
     return {
       recommendation: parsed.recommendation ?? 'PAY BUT VERIFY',
       confidence: parsed.confidence ?? 0.5,

@@ -343,7 +343,12 @@ async function handleProcess(
     // Parse the normalised invoice from Bedrock response
     let parsedResponse: { invoice: Record<string, unknown>; confidence: Record<string, number> };
     try {
-      parsedResponse = JSON.parse(normalisationResponse.content);
+      // Strip markdown code fences if present
+      let normContent = normalisationResponse.content.trim();
+      if (normContent.startsWith('```')) {
+        normContent = normContent.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      }
+      parsedResponse = JSON.parse(normContent);
     } catch {
       // Try to extract JSON from the response if it has extra text
       const jsonMatch = normalisationResponse.content.match(/\{[\s\S]*\}/);
