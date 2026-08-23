@@ -138,6 +138,25 @@ export class NetworkStack extends cdk.Stack {
       },
     );
 
+    // CloudFront Function to strip /api prefix before forwarding to API Gateway
+    const apiPathRewriteFunction = new cloudfront.Function(
+      this,
+      'ApiPathRewriteFunction',
+      {
+        functionName: `invoiceiq-${stage}-api-path-rewrite`,
+        code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  request.uri = request.uri.replace(/^\\/api/, '');
+  if (request.uri === '') {
+    request.uri = '/';
+  }
+  return request;
+}
+`),
+      },
+    );
+
     // CloudFront distribution
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
@@ -155,6 +174,12 @@ export class NetworkStack extends cdk.Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: apiCachePolicy,
           originRequestPolicy: apiOriginRequestPolicy,
+          functionAssociations: [
+            {
+              function: apiPathRewriteFunction,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
         },
       },
       domainNames: [domainName],
