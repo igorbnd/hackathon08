@@ -12,6 +12,10 @@ const app = new cdk.App();
 const stage = app.node.tryGetContext('stage') || 'dev';
 const domainName = app.node.tryGetContext('domainName');
 
+// NOTE: Cognito User Pool and Client are provisioned separately (not via CDK in
+// this repo). The Compute stack imports their IDs via cdk.Fn.importValue and
+// re-exports them as CfnOutputs for the generate-config.sh script.
+
 const appEnv: cdk.Environment = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION,

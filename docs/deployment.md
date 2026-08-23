@@ -98,7 +98,7 @@ The CertificateStack deploys to `us-east-1` and creates:
 
 ```bash
 cd infra
-npx cdk deploy InvoiceIQ-CertificateStack -c stage=prod --require-approval never
+npx cdk deploy InvoiceIQ-Certificate-prod -c stage=prod --require-approval never
 ```
 
 > **IMPORTANT: The deploy will BLOCK here.**
@@ -109,8 +109,8 @@ The stack will output the following values:
 
 ```
 Outputs:
-InvoiceIQ-CertificateStack.CertificateArn = arn:aws:acm:us-east-1:123456789012:certificate/abc-def-ghi
-InvoiceIQ-CertificateStack.DnsValidationNote = Add CNAME: _hexstring.invoiceiq.igorbond.com -> _hexstring.acm-validations.aws
+InvoiceIQ-Certificate-prod.CertificateArn = arn:aws:acm:us-east-1:123456789012:certificate/abc-def-ghi
+InvoiceIQ-Certificate-prod.DnsValidationNote = Add CNAME: _hexstring.invoiceiq.igorbond.com -> _hexstring.acm-validations.aws
 ```
 
 The exact CNAME name and value are determined by ACM at deploy time. They follow this pattern:
@@ -160,11 +160,11 @@ After adding the record, wait for ACM to validate. The CertificateStack deploy i
 Once you add the DNS record, monitor your terminal. You should see:
 
 ```
-InvoiceIQ-CertificateStack: creating CloudFormation changeset...
+InvoiceIQ-Certificate-prod: creating CloudFormation changeset...
  ...
-InvoiceIQ-CertificateStack | 0/3 | CREATE_IN_PROGRESS | AWS::CertificateManager::Certificate
+InvoiceIQ-Certificate-prod | 0/3 | CREATE_IN_PROGRESS | AWS::CertificateManager::Certificate
  ...
-InvoiceIQ-CertificateStack | 3/3 | CREATE_COMPLETE | AWS::CloudFormation::Stack
+InvoiceIQ-Certificate-prod | 3/3 | CREATE_COMPLETE | AWS::CloudFormation::Stack
 ```
 
 If it does not complete within 30 minutes:
@@ -194,9 +194,9 @@ After the NetworkStack deploys, note the CloudFront distribution domain name fro
 
 ```
 Outputs:
-InvoiceIQ-NetworkStack.DistributionDomainName = d1234abcdef8.cloudfront.net
-InvoiceIQ-NetworkStack.DistributionId = E1234ABCDEF
-InvoiceIQ-NetworkStack.CustomDomain = invoiceiq.igorbond.com
+InvoiceIQ-Network-prod.DistributionDomainName = d1234abcdef8.cloudfront.net
+InvoiceIQ-Network-prod.DistributionId = E1234ABCDEF
+InvoiceIQ-Network-prod.CustomDomain = invoiceiq.igorbond.com
 ```
 
 ---
@@ -259,7 +259,7 @@ npm run build --workspace web
 
 # Sync to S3 with cache headers
 BUCKET_NAME=$(aws cloudformation describe-stacks \
-  --stack-name InvoiceIQ-StorageStack \
+  --stack-name InvoiceIQ-Storage-prod \
   --query "Stacks[0].Outputs[?OutputKey=='SpaBucketName'].OutputValue" \
   --output text --region eu-west-2)
 
@@ -277,7 +277,7 @@ aws s3 cp web/dist/config.json s3://$BUCKET_NAME/config.json \
 
 # Invalidate CloudFront
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-  --stack-name InvoiceIQ-NetworkStack \
+  --stack-name InvoiceIQ-Network-prod \
   --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
   --output text --region eu-west-2)
 
@@ -407,14 +407,14 @@ If a stack update fails or causes issues:
 cd infra
 
 # Roll back a specific stack to its previous state
-npx cdk deploy InvoiceIQ-NetworkStack -c stage=prod --rollback true
+npx cdk deploy InvoiceIQ-Network-prod -c stage=prod --rollback true
 ```
 
 CloudFormation automatically rolls back failed deployments. If a stack is stuck in `UPDATE_ROLLBACK_FAILED`:
 
 ```bash
 aws cloudformation continue-update-rollback \
-  --stack-name InvoiceIQ-NetworkStack \
+  --stack-name InvoiceIQ-Network-prod \
   --region eu-west-2
 ```
 
@@ -453,13 +453,13 @@ cd infra
 
 # Empty the S3 buckets first (CDK cannot delete non-empty buckets)
 BUCKET_NAME=$(aws cloudformation describe-stacks \
-  --stack-name InvoiceIQ-StorageStack \
+  --stack-name InvoiceIQ-Storage-prod \
   --query "Stacks[0].Outputs[?OutputKey=='SpaBucketName'].OutputValue" \
   --output text --region eu-west-2)
 aws s3 rm s3://$BUCKET_NAME --recursive
 
 DOC_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name InvoiceIQ-StorageStack \
+  --stack-name InvoiceIQ-Storage-prod \
   --query "Stacks[0].Outputs[?OutputKey=='DocumentsBucketName'].OutputValue" \
   --output text --region eu-west-2)
 aws s3 rm s3://$DOC_BUCKET --recursive

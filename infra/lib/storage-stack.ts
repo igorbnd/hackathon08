@@ -109,5 +109,16 @@ export class StorageStack extends cdk.Stack {
       sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
+
+    // Outputs used by deploy.sh and destroy.sh to locate the SPA bucket
+    new cdk.CfnOutput(this, 'SpaBucketName', {
+      value: this.spaBucket.bucketName,
+      description: 'SPA hosting bucket name',
+    });
+
+    new cdk.CfnOutput(this, 'DocumentsBucketName', {
+      value: this.documentsBucket.bucketName,
+      description: 'Documents storage bucket name',
+    });
   }
 }

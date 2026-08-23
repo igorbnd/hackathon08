@@ -278,5 +278,17 @@ export class ComputeStack extends cdk.Stack {
       principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
       sourceArn: `arn:aws:execute-api:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:${httpApi.ref}/*`,
     });
+
+    // Expose Cognito IDs (imported from external stack) as CfnOutputs
+    // so that generate-config.sh can read them for runtime config generation.
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-id`),
+      description: 'Cognito User Pool ID (imported from external stack)',
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-client-id`),
+      description: 'Cognito User Pool Client ID (imported from external stack)',
+    });
   }
 }

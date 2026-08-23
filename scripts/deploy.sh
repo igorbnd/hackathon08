@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full deployment script for InvoiceIQ.
-# Builds the SPA, deploys CDK stacks, generates runtime config,
-# syncs assets to S3, and invalidates CloudFront.
+# Builds the SPA, deploys CDK stacks (two-phase for certificate DNS validation),
+# generates runtime config, syncs assets to S3, and invalidates CloudFront.
 #
 # Usage: ./scripts/deploy.sh [--stage dev|prod]
 
@@ -25,6 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
 REGION="${AWS_DEFAULT_REGION:-eu-west-2}"
 STACK_PREFIX="InvoiceIQ"
+CERT_STACK="${STACK_PREFIX}-Certificate-${STAGE}"
 
 echo "============================================"
 echo " InvoiceIQ Deploy - stage=$STAGE region=$REGION"
@@ -32,45 +33,82 @@ echo "============================================"
 
 # ─── Step 1: Build the SPA ────────────────────────────────────────────────────
 echo ""
-echo "[1/5] Building web application..."
+echo "[1/6] Building web application..."
 cd "$ROOT_DIR"
 npm run build --workspace web
 
-# ─── Step 2: Deploy CDK stacks ────────────────────────────────────────────────
+# ─── Step 2: Deploy CertificateStack (us-east-1) ─────────────────────────────
 echo ""
-echo "[2/5] Deploying CDK stacks..."
+echo "[2/6] Deploying CertificateStack (ACM + WAF in us-east-1)..."
+echo ""
+echo "  NOTE: If this is the first deploy, the stack will BLOCK until"
+echo "  ACM DNS validation succeeds. You must add the CNAME record in"
+echo "  Cloudflare (DNS only, proxy OFF) for validation to complete."
+echo "  See docs/deployment.md for full instructions."
+echo ""
+
 cd "$ROOT_DIR/infra"
+
+# Check if the certificate stack already exists and is complete
+CERT_STATUS=$(aws cloudformation describe-stacks \
+  --stack-name "$CERT_STACK" \
+  --region "us-east-1" \
+  --query "Stacks[0].StackStatus" \
+  --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+if [[ "$CERT_STATUS" == "DOES_NOT_EXIST" ]]; then
+  echo "  CertificateStack does not exist yet. Deploying..."
+  echo "  This will block until DNS validation succeeds."
+  echo ""
+  echo "  After the stack starts creating, check the ACM console in us-east-1"
+  echo "  for the CNAME validation record, then add it in Cloudflare."
+  echo ""
+  read -r -p "  Press Enter to continue (or Ctrl+C to abort)..."
+fi
+
+npx cdk deploy "$CERT_STACK" \
+  --context stage="$STAGE" \
+  --require-approval never \
+  --outputs-file cdk-outputs.json
+
+echo ""
+echo "  CertificateStack deployed successfully."
+
+# ─── Step 3: Deploy remaining stacks ─────────────────────────────────────────
+echo ""
+echo "[3/6] Deploying remaining stacks (Storage, Network, Compute, Observability, Cost)..."
+
 npx cdk deploy --all \
   --context stage="$STAGE" \
   --require-approval never \
   --outputs-file cdk-outputs.json
 
-# ─── Step 3: Generate runtime config ──────────────────────────────────────────
+# ─── Step 4: Generate runtime config ──────────────────────────────────────────
 echo ""
-echo "[3/5] Generating runtime config..."
+echo "[4/6] Generating runtime config..."
 cd "$ROOT_DIR"
 bash scripts/generate-config.sh --stage "$STAGE"
 
-# ─── Step 4: Sync SPA to S3 ──────────────────────────────────────────────────
+# ─── Step 5: Sync SPA to S3 ──────────────────────────────────────────────────
 echo ""
-echo "[4/5] Syncing SPA assets to S3..."
+echo "[5/6] Syncing SPA assets to S3..."
 
 # Get the SPA bucket name from stack outputs
-NETWORK_STACK="${STACK_PREFIX}-Network-${STAGE}"
+STORAGE_STACK="${STACK_PREFIX}-Storage-${STAGE}"
 SPA_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name "$NETWORK_STACK" \
+  --stack-name "$STORAGE_STACK" \
   --region "$REGION" \
   --query "Stacks[0].Outputs[?OutputKey=='SpaBucketName'].OutputValue" \
   --output text 2>/dev/null || echo "")
 
 if [[ -z "$SPA_BUCKET" ]]; then
-  # Try Storage stack as fallback
-  STORAGE_STACK="${STACK_PREFIX}-Storage-${STAGE}"
+  # Try Network stack as fallback
+  NETWORK_STACK="${STACK_PREFIX}-Network-${STAGE}"
   SPA_BUCKET=$(aws cloudformation describe-stacks \
-    --stack-name "$STORAGE_STACK" \
+    --stack-name "$NETWORK_STACK" \
     --region "$REGION" \
     --query "Stacks[0].Outputs[?OutputKey=='SpaBucketName'].OutputValue" \
-    --output text)
+    --output text 2>/dev/null || echo "")
 fi
 
 if [[ -z "$SPA_BUCKET" ]]; then
@@ -109,10 +147,11 @@ aws s3 sync "$WEB_DIST" "s3://${SPA_BUCKET}" \
   --delete \
   --region "$REGION"
 
-# ─── Step 5: Invalidate CloudFront ───────────────────────────────────────────
+# ─── Step 6: Invalidate CloudFront ───────────────────────────────────────────
 echo ""
-echo "[5/5] Invalidating CloudFront cache..."
+echo "[6/6] Invalidating CloudFront cache..."
 
+NETWORK_STACK="${STACK_PREFIX}-Network-${STAGE}"
 DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
   --stack-name "$NETWORK_STACK" \
   --region "$REGION" \
