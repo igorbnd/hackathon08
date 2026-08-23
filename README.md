@@ -4,6 +4,14 @@
 
 ![InvoiceIQ Architecture](https://img.shields.io/badge/Built_with-Kiro-blue) ![AWS](https://img.shields.io/badge/Cloud-AWS-orange) ![TypeScript](https://img.shields.io/badge/Language-TypeScript-blue) ![License](https://img.shields.io/badge/License-MIT-green)
 
+## Screenshots
+
+| Dashboard | Invoice Detail & AI Recommendation |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Invoice Detail](docs/screenshots/invoice-detail.png) |
+
+![AI Recommendation with Evidence and Historical Comparison](docs/screenshots/ai-recommendation.png)
+
 ---
 
 ## The Problem
