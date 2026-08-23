@@ -257,7 +257,7 @@ export function DashboardPage() {
                       {new Date(invoice.issueDate).toLocaleDateString()}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                      {invoice.total.toLocaleString('en-GB', { style: 'currency', currency: invoice.currency || 'GBP' })}
+                      {(invoice.total ?? 0).toLocaleString('en-GB', { style: 'currency', currency: invoice.currency || 'GBP' })}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadgeClass(invoice.status)}`}>
