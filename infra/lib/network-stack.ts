@@ -157,6 +157,28 @@ function handler(event) {
       },
     );
 
+    // CloudFront Function for SPA routing: rewrite non-file paths to /index.html
+    const spaRoutingFunction = new cloudfront.Function(
+      this,
+      'SpaRoutingFunction',
+      {
+        functionName: `invoiceiq-${stage}-spa-routing`,
+        code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  // If the URI has a file extension (e.g., .js, .css, .png), pass through
+  if (uri.includes('.')) {
+    return request;
+  }
+  // Otherwise rewrite to index.html for SPA routing
+  request.uri = '/index.html';
+  return request;
+}
+`),
+      },
+    );
+
     // CloudFront distribution
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
@@ -166,6 +188,12 @@ function handler(event) {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         compress: true,
         responseHeadersPolicy,
+        functionAssociations: [
+          {
+            function: spaRoutingFunction,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       additionalBehaviors: {
         'api/*': {
@@ -190,20 +218,6 @@ function handler(event) {
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       webAclId: webAclArn,
-      errorResponses: [
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.seconds(0),
-        },
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-          ttl: cdk.Duration.seconds(0),
-        },
-      ],
     });
 
     this.distributionDomainName = this.distribution.distributionDomainName;
