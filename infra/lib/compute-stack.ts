@@ -130,6 +130,13 @@ export class ComputeStack extends cdk.Stack {
 
     this.ingestionFunction.addToRolePolicy(
       new iam.PolicyStatement({
+        actions: ['kms:GenerateDataKey', 'kms:Decrypt', 'kms:Encrypt'],
+        resources: ['*'],
+      }),
+    );
+
+    this.ingestionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
         actions: ['textract:AnalyzeExpense', 'textract:GetExpenseAnalysis'],
         resources: ['*'],
       }),
