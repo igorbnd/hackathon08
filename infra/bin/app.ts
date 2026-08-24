@@ -42,11 +42,9 @@ const networkStack = new NetworkStack(app, `InvoiceIQ-Network-${stage}`, {
   domainName,
   certificateArn: certificateStack.certificateArn,
   webAclArn: certificateStack.webAclArn,
-  spaBucket: storageStack.spaBucket,
   env: appEnv,
   crossRegionReferences: true,
 });
-networkStack.addDependency(storageStack);
 networkStack.addDependency(certificateStack);
 
 const computeStack = new ComputeStack(app, `InvoiceIQ-Compute-${stage}`, {

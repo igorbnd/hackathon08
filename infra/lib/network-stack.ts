@@ -10,7 +10,6 @@ export interface NetworkStackProps extends cdk.StackProps {
   domainName: string;
   certificateArn: string;
   webAclArn: string;
-  spaBucket: s3.IBucket;
 }
 
 export class NetworkStack extends cdk.Stack {
@@ -19,11 +18,23 @@ export class NetworkStack extends cdk.Stack {
   public readonly distribution: cloudfront.Distribution;
   public readonly apiEndpoint: string;
   public readonly distributionDomainName: string;
+  public readonly spaBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
-    const { stage, domainName, certificateArn, webAclArn, spaBucket } = props;
+    const { stage, domainName, certificateArn, webAclArn } = props;
+
+    // SPA S3 bucket (lives here to avoid cross-stack circular dependency with CloudFront OAC)
+    this.spaBucket = new s3.Bucket(this, 'SpaBucket', {
+      bucketName: `invoiceiq-${stage}-spa-${cdk.Aws.ACCOUNT_ID}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    const spaBucket = this.spaBucket;
 
     // HTTP API (API Gateway V2)
     this.httpApi = new cdk.aws_apigatewayv2.CfnApi(this, 'HttpApi', {
@@ -236,6 +247,11 @@ function handler(event) {
     new cdk.CfnOutput(this, 'CustomDomain', {
       value: `https://${domainName}`,
       description: 'Custom domain URL',
+    });
+
+    new cdk.CfnOutput(this, 'SpaBucketName', {
+      value: this.spaBucket.bucketName,
+      description: 'SPA hosting bucket name',
     });
   }
 }

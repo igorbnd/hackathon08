@@ -12,7 +12,6 @@ export interface StorageStackProps extends cdk.StackProps {
 export class StorageStack extends cdk.Stack {
   public readonly documentsKey: kms.Key;
   public readonly documentsBucket: s3.Bucket;
-  public readonly spaBucket: s3.Bucket;
   public readonly table: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: StorageStackProps) {
@@ -75,14 +74,7 @@ export class StorageStack extends cdk.Stack {
       }),
     );
 
-    // SPA S3 bucket with SSE-S3 encryption
-    this.spaBucket = new s3.Bucket(this, 'SpaBucket', {
-      bucketName: `invoiceiq-${stage}-spa-${cdk.Aws.ACCOUNT_ID}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    // SPA S3 bucket moved to NetworkStack to avoid cross-stack circular dependency with CloudFront OAC
 
     // DynamoDB table with single-table design
     this.table = new dynamodb.Table(this, 'Table', {
@@ -110,12 +102,7 @@ export class StorageStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Outputs used by deploy.sh and destroy.sh to locate the SPA bucket
-    new cdk.CfnOutput(this, 'SpaBucketName', {
-      value: this.spaBucket.bucketName,
-      description: 'SPA hosting bucket name',
-    });
-
+    // Outputs used by deploy.sh and destroy.sh
     new cdk.CfnOutput(this, 'DocumentsBucketName', {
       value: this.documentsBucket.bucketName,
       description: 'Documents storage bucket name',
