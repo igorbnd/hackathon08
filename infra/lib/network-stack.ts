@@ -120,22 +120,26 @@ export class NetworkStack extends cdk.Stack {
       },
     );
 
-    // Cache policy for API: no caching
+    // Cache policy for API: no caching, forward Authorization header
     const apiCachePolicy = new cloudfront.CachePolicy(this, 'ApiCachePolicy', {
       cachePolicyName: `invoiceiq-${stage}-api-no-cache`,
       defaultTtl: cdk.Duration.seconds(0),
       minTtl: cdk.Duration.seconds(0),
       maxTtl: cdk.Duration.seconds(0),
+      headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
+        'Authorization',
+        'Content-Type',
+      ),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
     });
 
-    // Origin request policy for API: forward Authorization header and other viewer headers
+    // Origin request policy for API: forward query strings (Authorization is handled by CachePolicy)
     const apiOriginRequestPolicy = new cloudfront.OriginRequestPolicy(
       this,
       'ApiOriginRequestPolicy',
       {
         originRequestPolicyName: `invoiceiq-${stage}-api-origin-request`,
         headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-          'Authorization',
           'Content-Type',
         ),
         queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
