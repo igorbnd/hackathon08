@@ -24,10 +24,12 @@ export async function generatePresignedUploadUrl(
     Bucket: options.bucket ?? DOCUMENTS_BUCKET,
     Key: options.key,
     ContentType: options.contentType ?? 'application/pdf',
+    ServerSideEncryption: 'aws:kms',
   });
 
   return getSignedUrl(s3Client, command, {
     expiresIn: options.expiresIn ?? 300,
+    unhoistableHeaders: new Set(['x-amz-server-side-encryption']),
   });
 }
 
