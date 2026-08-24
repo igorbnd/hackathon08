@@ -46,13 +46,13 @@ export function SubscriptionsPage() {
         <div className="rounded-lg bg-white p-6 shadow">
           <p className="text-sm font-medium text-gray-600">Total Annualised Spend</p>
           <p className="mt-1 text-3xl font-semibold text-gray-900">
-            {data.totalAnnualised.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+            {(data.totalAnnualised ?? 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
           </p>
         </div>
         <div className="rounded-lg bg-white p-6 shadow">
           <p className="text-sm font-medium text-gray-600">Estimated Waste</p>
           <p className="mt-1 text-3xl font-semibold text-red-600">
-            {data.wasteEstimate.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+            {(data.wasteEstimate ?? 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
           </p>
           <p className="mt-1 text-xs text-gray-500">Potential savings from overlaps and unused services</p>
         </div>
@@ -83,10 +83,10 @@ export function SubscriptionsPage() {
                     <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">{sub.vendorName}</td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700 capitalize">{sub.cadence}</td>
                     <td className="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-900">
-                      {sub.amount.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+                      {(sub.amount ?? 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-gray-900">
-                      {sub.annualisedCost.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+                      {(sub.annualisedCost ?? 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm">
                       <TrendIndicator trend={sub.trend} />
@@ -126,7 +126,7 @@ export function SubscriptionsPage() {
           <p className="mt-1 text-sm text-red-800">
             Based on usage patterns and service overlaps, we estimate you could save approximately{' '}
             <span className="font-bold">
-              {data.wasteEstimate.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+              {(data.wasteEstimate ?? 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
             </span>{' '}
             per year by consolidating or cancelling redundant services.
           </p>
