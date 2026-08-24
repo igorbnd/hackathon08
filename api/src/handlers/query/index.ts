@@ -160,7 +160,8 @@ async function handleGetInvoice(
   }
 
   // Extract invoice ID from path
-  const pathParts = (event.path ?? '').split('/');
+  const currentPath = event.path ?? (event as any).rawPath ?? '';
+  const pathParts = currentPath.split('/');
   const invoiceId = pathParts[pathParts.length - 1];
 
   if (!invoiceId) {
