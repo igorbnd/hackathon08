@@ -264,6 +264,12 @@ export class ComputeStack extends cdk.Stack {
       target: `integrations/${queryIntegration.ref}`,
     });
 
+    new apigatewayv2.CfnRoute(this, 'GetInvoiceStatusRoute', {
+      apiId: httpApi.ref,
+      routeKey: 'GET /invoices/{id}/status',
+      target: `integrations/${ingestionIntegration.ref}`,
+    });
+
     new apigatewayv2.CfnRoute(this, 'QueryRoute', {
       apiId: httpApi.ref,
       routeKey: 'POST /query',
