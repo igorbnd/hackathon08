@@ -100,7 +100,7 @@ export class NetworkStack extends cdk.Stack {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data:",
               "font-src 'self'",
-              "connect-src 'self' https://cognito-idp.*.amazonaws.com https://*.auth.*.amazoncognito.com https://*.s3.*.amazonaws.com https://*.s3.amazonaws.com",
+              "connect-src 'self' https://cognito-idp.*.amazonaws.com https://*.auth.*.amazoncognito.com https://*.s3.eu-west-2.amazonaws.com https://*.s3.amazonaws.com",
               "frame-ancestors 'none'",
               // NOTE: form-action 'self' will block Cognito hosted UI redirects if
               // the app ever switches to the OAuth redirect flow. Currently auth is
