@@ -31,8 +31,8 @@ export const handler = async (
   }
 
   try {
-    const path = event.path ?? event.resource ?? '';
-    const method = event.httpMethod ?? 'GET';
+    const path = event.path ?? (event as any).rawPath ?? event.resource ?? '';
+    const method = event.httpMethod ?? (event as any).requestContext?.http?.method ?? 'GET';
 
     // Route dispatch
     if (method === 'GET' && path.match(/\/invoices\/[^/]+$/)) {

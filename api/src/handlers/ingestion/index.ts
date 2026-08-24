@@ -154,8 +154,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     requestId: event.requestContext?.requestId ?? randomUUID(),
   });
 
-  const method = event.httpMethod ?? event.requestContext?.httpMethod ?? '';
-  const path = event.path ?? event.rawPath ?? '';
+  const method = event.httpMethod ?? (event as any).requestContext?.http?.method ?? '';
+  const path = event.path ?? (event as any).rawPath ?? '';
 
   // Handle CORS preflight
   if (method === 'OPTIONS') {

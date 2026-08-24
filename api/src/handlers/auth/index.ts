@@ -69,13 +69,14 @@ export const handler = async (
   });
 
   // Handle CORS preflight
-  if (event.httpMethod === 'OPTIONS') {
+  if (event.httpMethod === 'OPTIONS' || (event as any).requestContext?.http?.method === 'OPTIONS') {
     return corsPreflightResponse() as APIGatewayProxyResult;
   }
 
-  const path = event.path.replace(/\/$/, ''); // Normalize trailing slash
+  const path = (event.path ?? (event as any).rawPath ?? '').replace(/\/$/, ''); // Normalize trailing slash
+  const method = event.httpMethod ?? (event as any).requestContext?.http?.method ?? '';
 
-  logger.info('Auth request received', { path, method: event.httpMethod });
+  logger.info('Auth request received', { path, method });
 
   try {
     switch (path) {
