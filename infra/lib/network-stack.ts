@@ -131,31 +131,12 @@ export class NetworkStack extends cdk.Stack {
       },
     );
 
-    // Cache policy for API: no caching, forward Authorization header
-    const apiCachePolicy = new cloudfront.CachePolicy(this, 'ApiCachePolicy', {
-      cachePolicyName: `invoiceiq-${stage}-api-no-cache`,
-      defaultTtl: cdk.Duration.seconds(0),
-      minTtl: cdk.Duration.seconds(0),
-      maxTtl: cdk.Duration.seconds(0),
-      headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
-        'Authorization',
-        'Content-Type',
-      ),
-      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
-    });
+    // Use AWS managed CachingDisabled policy (no caching for API)
+    const apiCachePolicy = cloudfront.CachePolicy.CACHING_DISABLED;
 
-    // Origin request policy for API: forward query strings (Authorization is handled by CachePolicy)
-    const apiOriginRequestPolicy = new cloudfront.OriginRequestPolicy(
-      this,
-      'ApiOriginRequestPolicy',
-      {
-        originRequestPolicyName: `invoiceiq-${stage}-api-origin-request`,
-        headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList(
-          'Content-Type',
-        ),
-        queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.all(),
-      },
-    );
+    // Use AWS managed AllViewerExceptHostHeader policy to forward all headers
+    // (including Authorization) to the API Gateway origin
+    const apiOriginRequestPolicy = cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER;
 
     // CloudFront Function to strip /api prefix before forwarding to API Gateway
     const apiPathRewriteFunction = new cloudfront.Function(
