@@ -99,7 +99,21 @@ export const handler = async (
       default:
         return error('Not found', 404) as APIGatewayProxyResult;
     }
-  } catch (err) {
+  } catch (err: any) {
+    // Return Cognito errors as 400 with the actual message
+    const cognitoErrors = [
+      'InvalidPasswordException',
+      'UsernameExistsException',
+      'UserNotConfirmedException',
+      'NotAuthorizedException',
+      'UserNotFoundException',
+      'InvalidParameterException',
+      'CodeMismatchException',
+      'ExpiredCodeException',
+    ];
+    if (err?.name && cognitoErrors.includes(err.name)) {
+      return error(err.message ?? 'Authentication error', 400) as APIGatewayProxyResult;
+    }
     logger.error('Unhandled error in auth handler', err);
     return error('Internal server error', 500) as APIGatewayProxyResult;
   }
@@ -125,6 +139,20 @@ async function handleSignUp(
   logger.info('Sign-up attempt', { action: 'signup' });
 
   const result = await signUp({ email, password, name });
+
+  // Auto-confirm user (prototype: skip email verification for demo purposes)
+  try {
+    const { AdminConfirmSignUpCommand } = await import('@aws-sdk/client-cognito-identity-provider');
+    const { cognitoClient } = await import('../../lib/cognito.js');
+    await (cognitoClient as any).send(new AdminConfirmSignUpCommand({
+      UserPoolId: process.env.USER_POOL_ID,
+      Username: email,
+    }));
+  } catch (confirmErr) {
+    logger.warn('Auto-confirm failed (user may need manual confirmation)', {
+      error: confirmErr instanceof Error ? confirmErr.message : String(confirmErr),
+    });
+  }
 
   logger.info('Sign-up successful', { action: 'signup', userId: result.userSub });
 
