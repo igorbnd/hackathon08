@@ -60,7 +60,7 @@ export function DashboardPage() {
     setLoading(true);
     setError('');
     try {
-      const params: GetInvoicesParams = { limit: 10, cursor };
+      const params: GetInvoicesParams = { limit: 50, cursor };
       if (vendor) params.vendor = vendor;
       if (status) params.status = status;
       if (dateFrom) params.dateFrom = dateFrom;

@@ -84,8 +84,9 @@ async function handleListInvoices(
   let lastKey: Record<string, any> | undefined;
 
   if (vendor) {
-    // Use GSI1 for vendor-specific queries
-    const gsi1pk = buildGSI1PK(userId, vendor);
+    // Normalise vendor input to slug format for GSI lookup
+    const vendorSlug = vendor.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const gsi1pk = buildGSI1PK(userId, vendorSlug);
     const result = await queryByGSI({
       indexName: 'GSI1',
       pkName: 'GSI1PK',
@@ -98,6 +99,20 @@ async function handleListInvoices(
     });
     items = result.items;
     lastKey = result.lastKey;
+
+    // If GSI returned nothing, try filtering by vendorName substring (case-insensitive)
+    if (items.length === 0) {
+      const allResult = await queryItems({
+        pk: buildPK(userId),
+        skPrefix: 'INV#',
+        limit: 200,
+        scanForward: false,
+      });
+      items = allResult.items.filter((item) =>
+        (item.vendorName ?? '').toLowerCase().includes(vendor.toLowerCase())
+      );
+      lastKey = undefined; // No pagination for filtered results
+    }
   } else if (dateFrom || dateTo) {
     // Use GSI2 for date range queries
     const gsi2pk = buildGSI2PK(userId);
@@ -128,10 +143,32 @@ async function handleListInvoices(
     lastKey = result.lastKey;
   }
 
-  // Apply post-query filters (status, recommendation)
+  // Apply post-query filters (status)
+  // If filtering by status, we need to fetch more items since DynamoDB can't filter by status natively
   let filteredItems = items;
   if (status) {
-    filteredItems = filteredItems.filter((item) => item.status === status);
+    filteredItems = items.filter((item) => item.status === status);
+    
+    // If we didn't get enough filtered results and there are more pages, keep fetching
+    let fetchAttempts = 0;
+    while (filteredItems.length < limit && lastKey && fetchAttempts < 5) {
+      fetchAttempts++;
+      const moreResult = await queryItems({
+        pk: buildPK(userId),
+        skPrefix: 'INV#',
+        limit: 50,
+        startKey: lastKey,
+        scanForward: false,
+      });
+      const moreFiltered = moreResult.items.filter((item) => item.status === status);
+      filteredItems = [...filteredItems, ...moreFiltered];
+      lastKey = moreResult.lastKey;
+    }
+    
+    // Trim to requested limit
+    if (filteredItems.length > limit) {
+      filteredItems = filteredItems.slice(0, limit);
+    }
   }
 
   // Encode next cursor
