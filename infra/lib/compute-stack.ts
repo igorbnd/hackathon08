@@ -130,6 +130,13 @@ export class ComputeStack extends cdk.Stack {
 
     this.ingestionFunction.addToRolePolicy(
       new iam.PolicyStatement({
+        actions: ['s3:ListBucket'],
+        resources: [documentsBucket.bucketArn],
+      }),
+    );
+
+    this.ingestionFunction.addToRolePolicy(
+      new iam.PolicyStatement({
         actions: ['kms:GenerateDataKey', 'kms:Decrypt', 'kms:Encrypt'],
         resources: ['*'],
       }),
