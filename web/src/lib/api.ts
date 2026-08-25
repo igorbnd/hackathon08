@@ -289,6 +289,16 @@ export async function getInvoiceStatus(id: string): Promise<InvoiceStatusRespons
   return apiFetch(`/invoices/${id}/status`);
 }
 
+// ─── Invoice Actions ─────────────────────────────────────────────────────────
+
+export async function deleteInvoice(id: string): Promise<{ message: string }> {
+  return apiFetch(`/invoices/${id}`, { method: 'DELETE' });
+}
+
+export async function updateInvoiceStatus(id: string, status: string): Promise<{ message: string }> {
+  return apiFetch(`/invoices/${id}/status`, { method: 'POST', body: { status } });
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 export interface SearchResponse {

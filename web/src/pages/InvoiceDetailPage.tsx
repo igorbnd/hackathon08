@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getInvoice, type InvoiceDetailResponse, type Delta } from '../lib/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getInvoice, deleteInvoice, updateInvoiceStatus, type InvoiceDetailResponse, type Delta } from '../lib/api';
 
 function getRecommendationColor(type: string): { bg: string; text: string; border: string } {
   switch (type?.toUpperCase()) {
@@ -43,6 +43,7 @@ function DeltaValue({ delta }: { delta: Delta }) {
 
 export function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<InvoiceDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,6 +56,28 @@ export function InvoiceDetailPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load invoice'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleDelete = async () => {
+    if (!id || !confirm('Are you sure you want to delete this invoice?')) return;
+    try {
+      await deleteInvoice(id);
+      navigate('/dashboard');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete invoice');
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!id) return;
+    try {
+      await updateInvoiceStatus(id, 'paid');
+      // Refresh the invoice data
+      const updated = await getInvoice(id);
+      setData(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-gray-600">Loading invoice...</div>;
@@ -103,6 +126,22 @@ export function InvoiceDetailPage() {
             }`}>
               {invoice.status}
             </span>
+            <div className="mt-3 flex gap-2">
+              {invoice.status !== 'paid' && (
+                <button
+                  onClick={handleMarkAsPaid}
+                  className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+                >
+                  Mark as Paid
+                </button>
+              )}
+              <button
+                onClick={handleDelete}
+                className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">

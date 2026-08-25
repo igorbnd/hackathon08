@@ -203,6 +203,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return await handleGetStatus(invoiceId, userId);
     }
 
+    // Route: POST /invoices/{id}/status (update invoice status)
+    const statusUpdateMatch = path.match(/\/invoices\/([^/]+)\/status$/);
+    if (method === 'POST' && statusUpdateMatch) {
+      const invoiceId = statusUpdateMatch[1];
+      if (!invoiceId) {
+        return error('Missing invoice ID', 400) as APIGatewayProxyResult;
+      }
+      return await handleUpdateStatus(invoiceId, userId, event, logger);
+    }
+
     // Route: DELETE /invoices/{id}
     if (method === 'DELETE') {
       const invoiceId = extractPathParam(path, '/invoices');
@@ -522,6 +532,48 @@ async function handleGetStatus(
     updatedAt: statusRecord.updatedAt,
     ...(statusRecord.reason ? { reason: statusRecord.reason } : {}),
   }) as APIGatewayProxyResult;
+}
+
+// ─── Update Status Endpoint ─────────────────────────────────────────────────
+
+async function handleUpdateStatus(
+  invoiceId: string,
+  userId: string,
+  event: any,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  const body = event.body ? JSON.parse(event.body) : {};
+  const newStatus = body.status;
+
+  const validStatuses = ['unpaid', 'paid', 'disputed', 'cancelled'];
+  if (!newStatus || !validStatuses.includes(newStatus)) {
+    return error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400) as APIGatewayProxyResult;
+  }
+
+  logger.info('Updating invoice status', { invoiceId, userId, newStatus });
+
+  const existing = await getItem({
+    pk: buildPK(userId),
+    sk: buildSK(invoiceId),
+  });
+
+  if (!existing) {
+    return error('Invoice not found', 404) as APIGatewayProxyResult;
+  }
+
+  if (existing.userId && existing.userId !== userId) {
+    return error('Forbidden', 403) as APIGatewayProxyResult;
+  }
+
+  await putItem({
+    item: {
+      ...existing,
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    },
+  });
+
+  return success({ message: `Invoice status updated to ${newStatus}` }) as APIGatewayProxyResult;
 }
 
 // ─── Delete Endpoint ────────────────────────────────────────────────────────
