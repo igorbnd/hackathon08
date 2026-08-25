@@ -11,6 +11,10 @@
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Invoice Detail](docs/screenshots/invoice-detail.png) |
 ![AI Recommendation with Evidence and Historical Comparison](docs/screenshots/ai-recommendation.png)
 
+## Demo Video
+
+[![InvoiceIQ Demo](https://img.youtube.com/vi/Xj53Z6YSxnIgMIIc/maxresdefault.jpg)](https://www.youtube.com/watch?v=Xj53Z6YSxnIgMIIc)
+
 ---
 
 ## The Problem
