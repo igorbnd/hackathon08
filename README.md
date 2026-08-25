@@ -13,7 +13,7 @@
 
 ## Demo Video
 
-[![InvoiceIQ Demo](https://img.youtube.com/vi/Xj53Z6YSxnIgMIIc/maxresdefault.jpg)](https://www.youtube.com/watch?v=Xj53Z6YSxnIgMIIc)
+[![InvoiceIQ Demo](https://img.youtube.com/vi/igqqwThtf-o/maxresdefault.jpg)](https://www.youtube.com/watch?v=igqqwThtf-o)
 
 ---
 
