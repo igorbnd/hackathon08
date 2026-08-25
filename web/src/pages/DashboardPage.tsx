@@ -102,10 +102,8 @@ export function DashboardPage() {
   };
 
   // Compute summary stats from available data
-  const totalSpend = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const pendingActions = invoices.filter(
-    (inv) => inv.recommendation && inv.recommendation.type !== 'PAY'
-  ).length;
+  const totalSpend = invoices.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
+  const unpaidCount = invoices.filter((inv) => inv.status === 'unpaid').length;
 
   return (
     <div className="space-y-6">
@@ -114,21 +112,21 @@ export function DashboardPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-600">Total Invoices</p>
-          <p className="mt-1 text-3xl font-semibold text-gray-900">{total}</p>
+          <p className="text-sm font-medium text-gray-600">Invoices</p>
+          <p className="mt-1 text-3xl font-semibold text-gray-900">{invoices.length}</p>
         </div>
         <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-600">Pending Actions</p>
-          <p className="mt-1 text-3xl font-semibold text-orange-600">{pendingActions}</p>
+          <p className="text-sm font-medium text-gray-600">Unpaid</p>
+          <p className="mt-1 text-3xl font-semibold text-orange-600">{unpaidCount}</p>
         </div>
         <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-600">Total Spend (page)</p>
+          <p className="text-sm font-medium text-gray-600">Total Spend</p>
           <p className="mt-1 text-3xl font-semibold text-gray-900">
             {totalSpend.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
           </p>
         </div>
         <div className="rounded-lg bg-white p-6 shadow">
-          <p className="text-sm font-medium text-gray-600">Active Subscriptions</p>
+          <p className="text-sm font-medium text-gray-600">Subscriptions</p>
           <p className="mt-1 text-3xl font-semibold text-indigo-600">
             <Link to="/subscriptions" className="hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
               View
@@ -286,8 +284,8 @@ export function DashboardPage() {
         {!loading && invoices.length > 0 && (
           <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
             <p className="text-sm text-gray-700">
-              Showing <span className="font-medium">{invoices.length}</span> of{' '}
-              <span className="font-medium">{total}</span> invoices
+              Showing <span className="font-medium">{invoices.length}</span> invoices
+              {nextCursor && <span> (more available)</span>}
             </p>
             <div className="flex space-x-2">
               <button
