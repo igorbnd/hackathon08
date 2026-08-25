@@ -270,7 +270,9 @@ export function DashboardPage() {
                           {invoice.recommendation.type}
                         </span>
                       ) : (
-                        <span className="text-sm text-gray-500">Pending</span>
+                        <Link to={`/invoices/${invoice.invoiceId}`} className="text-sm text-indigo-600 hover:text-indigo-800">
+                          View →
+                        </Link>
                       )}
                     </td>
                   </tr>
