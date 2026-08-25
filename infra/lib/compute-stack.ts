@@ -162,6 +162,7 @@ export class ComputeStack extends cdk.Stack {
           'dynamodb:PutItem',
           'dynamodb:GetItem',
           'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
           'dynamodb:Query',
         ],
         resources: [table.tableArn, `${table.tableArn}/index/*`],
