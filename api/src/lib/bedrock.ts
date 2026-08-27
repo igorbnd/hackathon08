@@ -5,7 +5,7 @@ import {
 
 const bedrockClient = new BedrockRuntimeClient({});
 
-const DEFAULT_MODEL_ID = 'anthropic.claude-3-haiku-20240307-v1:0';
+const DEFAULT_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-haiku-4-5-20251001-v1:0';
 
 export interface InvokeModelInput {
   prompt: string;

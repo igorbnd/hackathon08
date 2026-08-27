@@ -47,7 +47,7 @@ const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME ?? "";
 
 const DEMO_EMAIL = "demo@invoiceiq.example";
 const DEMO_PASSWORD = "Demo1234!Secure";
-const DEMO_USER_ID = "demo-user-001";
+const DEMO_USER_ID = "06a282b4-8051-7092-996e-448f6704e82d";
 
 const FIXTURES_DIR = join(import.meta.dirname ?? ".", "..");
 const INVOICES_DIR = join(FIXTURES_DIR, "invoices");
@@ -296,10 +296,10 @@ async function writeInvoiceRecords(userId: string): Promise<void> {
       return {
         PK: `USER#${userId}`,
         SK: `INV#${invoice.invoiceId}`,
-        GSI1PK: `USER#${userId}`,
-        GSI1SK: `DATE#${invoice.issueDate}`,
-        GSI2PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
-        GSI2SK: `DATE#${invoice.issueDate}`,
+	GSI1PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
+	GSI1SK: `DATE#${invoice.issueDate}`,
+	GSI2PK: `USER#${userId}#DATE`,
+	GSI2SK: `DATE#${invoice.issueDate}`,
         invoiceId: invoice.invoiceId,
         vendorId: invoice.vendorId,
         vendorName: invoice.vendorName,
