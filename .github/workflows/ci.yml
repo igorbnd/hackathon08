@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  quality:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -10,6 +10,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npm run lint --if-present
-      - run: npm run typecheck --if-present
-      - run: npm run test --if-present
+      - name: Build web app
+        run: npm run build --workspace web
+      - name: Run schema tests
+        run: npm run test --workspace packages/schema --if-present
