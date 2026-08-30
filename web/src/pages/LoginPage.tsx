@@ -95,14 +95,6 @@ export function LoginPage() {
             </Link>
           </div>
         </form>
-
-        {/* Demo Credentials Hint */}
-        <div className="rounded-md bg-blue-50 p-4">
-          <p className="text-sm text-blue-800">
-            <span className="font-medium">Demo credentials:</span>{' '}
-            demo@invoiceiq.example / Demo1234!Secure
-          </p>
-        </div>
       </div>
     </div>
   );
