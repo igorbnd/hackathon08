@@ -30,7 +30,14 @@ export function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">InvoiceIQ</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+            <Link
+              to="/"
+              className="rounded text-indigo-600 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              InvoiceIQ
+            </Link>
+          </h1>
           <h2 className="mt-2 text-lg text-gray-700">Sign in to your account</h2>
         </div>
 
