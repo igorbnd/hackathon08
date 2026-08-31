@@ -247,6 +247,12 @@ export class ComputeStack extends cdk.Stack {
       target: `integrations/${ingestionIntegration.ref}`,
     });
 
+    new apigatewayv2.CfnRoute(this, 'SeedSampleDataRoute', {
+      apiId: httpApi.ref,
+      routeKey: 'POST /invoices/sample-data',
+      target: `integrations/${ingestionIntegration.ref}`,
+    });
+
     new apigatewayv2.CfnRoute(this, 'ProcessRoute', {
       apiId: httpApi.ref,
       routeKey: 'POST /invoices/{id}/process',

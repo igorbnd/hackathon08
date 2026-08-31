@@ -23,6 +23,11 @@ import {
   buildGSI2PK,
   buildGSI2SK,
 } from '../../lib/dynamodb.js';
+import {
+  SAMPLE_INVOICES,
+  isoDateMonthsAgo,
+  addDays,
+} from '../../lib/sample-invoices.js';
 
 const s3Client = new S3Client({});
 
@@ -183,6 +188,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return await handleUpload(event, userId, logger);
     }
 
+    // Route: POST /invoices/sample-data
+    if (method === 'POST' && path.endsWith('/invoices/sample-data')) {
+      return await handleSeedSampleData(userId, logger);
+    }
+
     // Route: POST /invoices/{id}/process (anchored regex to avoid false matches)
     const processMatch = path.match(/\/invoices\/([^/]+)\/process$/);
     if (method === 'POST' && processMatch) {
@@ -228,6 +238,80 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return error('Internal server error', 500) as APIGatewayProxyResult;
   }
 };
+
+// ─── Sample Data Endpoint ───────────────────────────────────────────────────
+
+/**
+ * Seed the calling user's account with the curated sample invoice corpus.
+ *
+ * Invoice IDs are deterministic (`sample-<slug>`), so calling this repeatedly
+ * overwrites the same records rather than accumulating duplicates. Every record
+ * is tagged `metadata.isSampleData = true` so demo data stays distinguishable
+ * from anything the user uploaded themselves.
+ */
+async function handleSeedSampleData(
+  userId: string,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  logger.info('Seeding sample data', { userId, count: SAMPLE_INVOICES.length });
+
+  const now = new Date().toISOString();
+
+  const records = SAMPLE_INVOICES.map((template) => {
+    const issueDate = isoDateMonthsAgo(template.monthsAgo, template.day);
+    const dueDate = addDays(issueDate, template.dueInDays);
+    const invoiceId = `sample-${template.id}`;
+
+    return {
+      // Keys built with the shared helpers so sample data is indexed exactly
+      // the same way as invoices created through the upload pipeline.
+      PK: buildPK(userId),
+      SK: buildSK(invoiceId),
+      GSI1PK: buildGSI1PK(userId, template.vendorId),
+      GSI1SK: buildGSI1SK(issueDate),
+      GSI2PK: buildGSI2PK(userId),
+      GSI2SK: buildGSI2SK(issueDate, invoiceId),
+
+      invoiceId,
+      userId,
+      vendorId: template.vendorId,
+      vendorName: template.vendorName,
+      issueDate,
+      dueDate,
+      referenceNumber: template.referenceNumber,
+      lineItems: template.lineItems,
+      subtotal: template.subtotal,
+      vatAmount: template.vatAmount,
+      total: template.total,
+      currency: template.currency,
+      status: template.status,
+      category: template.category,
+      metadata: { ...template.metadata, isSampleData: true },
+      entityType: 'INVOICE',
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+
+  // Written in small parallel batches rather than via BatchWriteItem, so this
+  // needs no additional IAM permissions beyond the existing PutItem grant.
+  const CHUNK_SIZE = 5;
+  for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+    await Promise.all(
+      records.slice(i, i + CHUNK_SIZE).map((item) => putItem({ item })),
+    );
+  }
+
+  logger.info('Sample data seeded', { userId, count: records.length });
+
+  return success(
+    {
+      message: `Loaded ${records.length} sample invoices`,
+      count: records.length,
+    },
+    201,
+  ) as APIGatewayProxyResult;
+}
 
 // ─── Upload Endpoint ────────────────────────────────────────────────────────
 

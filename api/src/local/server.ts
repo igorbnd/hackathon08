@@ -16,6 +16,7 @@ app.post('/auth/*', lambdaAdapter(authHandler));
 
 // Ingestion routes
 app.post('/invoices/upload', lambdaAdapter(ingestionHandler));
+app.post('/invoices/sample-data', lambdaAdapter(ingestionHandler));
 app.post('/invoices/:id/process', lambdaAdapter(ingestionHandler));
 app.get('/invoices/:id/status', lambdaAdapter(ingestionHandler));
 app.delete('/invoices/:id', lambdaAdapter(ingestionHandler));
