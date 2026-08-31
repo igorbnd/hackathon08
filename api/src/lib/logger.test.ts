@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createLogger, Logger, startTimer } from './logger';
 
+/**
+ * Typed via the helper's inferred return type rather than
+ * `ReturnType<typeof vi.spyOn>`. The latter erases the generic parameters, so
+ * the declared type is `MockInstance<unknown[], unknown>` while the assigned
+ * value is `MockInstance<[message?: any, ...], void>`, and the two are not
+ * assignable. Inferring from the call site keeps this correct across vitest
+ * versions without naming any of its internal types.
+ */
+function spyOnConsoleLog() {
+  return vi.spyOn(console, 'log').mockImplementation(() => {});
+}
+
 describe('Logger', () => {
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof spyOnConsoleLog>;
 
   beforeEach(() => {
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    consoleSpy = spyOnConsoleLog();
   });
 
   afterEach(() => {
