@@ -7,6 +7,10 @@ type PipelineStatus = 'idle' | 'uploading' | 'queued' | 'extracting' | 'normalis
 const ACCEPTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 const ACCEPTED_EXTENSIONS = '.pdf,.png,.jpg,.jpeg';
 
+// Mirrors MAX_UPLOAD_SIZE_BYTES in the ingestion handler. Checked here too so an
+// oversized file fails immediately instead of after a pointless S3 round trip.
+const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+
 const statusSteps: PipelineStatus[] = ['queued', 'extracting', 'normalising', 'analysing', 'ready'];
 
 function getStepIndex(status: PipelineStatus): number {
@@ -31,32 +35,50 @@ export function UploadPage() {
     setDragOver(false);
   };
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Single validation path for both drag-drop and the file picker, so neither
+  // route can smuggle in a file the other would have rejected.
+  const acceptFile = (candidate: File) => {
+    // Any new selection resets the pipeline view, valid or not, so a stale
+    // "failed" state from a previous attempt cannot linger on screen.
+    setStatus('idle');
+
+    if (!ACCEPTED_TYPES.includes(candidate.type)) {
+      // Clear the previous selection too, so the error cannot be mistaken for a
+      // warning about a file that is still queued.
+      setFile(null);
+      setError('Unsupported file type. Please choose a PDF, PNG, or JPG file.');
+      return;
+    }
+    if (candidate.size > MAX_UPLOAD_SIZE_BYTES) {
+      setFile(null);
+      setError(`That file is ${formatFileSize(candidate.size)}. The maximum upload size is 5 MB.`);
+      return;
+    }
+
+    setFile(candidate);
+    setError('');
+  };
+
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && ACCEPTED_TYPES.includes(droppedFile.type)) {
-      setFile(droppedFile);
-      setError('');
-      setStatus('idle');
-    } else {
-      setError('Please drop a PDF, PNG, or JPG file.');
+    if (droppedFile) {
+      acceptFile(droppedFile);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
-      setFile(selected);
-      setError('');
-      setStatus('idle');
+      acceptFile(selected);
     }
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const pollStatus = async (id: string) => {
@@ -133,7 +155,7 @@ export function UploadPage() {
         <p className="text-sm font-medium text-gray-700">
           Drag and drop your invoice here, or click to browse
         </p>
-        <p className="mt-1 text-xs text-gray-500">PDF, PNG, or JPG up to 10MB</p>
+        <p className="mt-1 text-xs text-gray-500">PDF, PNG, or JPG up to 5 MB</p>
         <input
           ref={fileInputRef}
           type="file"
