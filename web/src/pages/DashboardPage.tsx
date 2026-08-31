@@ -6,6 +6,7 @@ import {
   type Invoice,
   type GetInvoicesParams,
 } from '../lib/api';
+import { SpendChart } from '../components/SpendChart';
 
 // ─── Due date helpers ────────────────────────────────────────────────────────
 
@@ -224,6 +225,9 @@ export function DashboardPage() {
           </p>
         </div>
       </div>
+
+      {/* Spend trend */}
+      {!loading && invoices.length > 0 && <SpendChart invoices={invoices} />}
 
       {/* Filter Controls */}
       <div className="rounded-lg bg-white p-4 shadow">
