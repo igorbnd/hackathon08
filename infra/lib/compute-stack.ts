@@ -124,6 +124,12 @@ export class ComputeStack extends cdk.Stack {
         TABLE_NAME: table.tableName,
         DOCUMENTS_BUCKET: documentsBucket.bucketName,
         STAGE: stage,
+        // Required to verify incoming JWTs against the pool's JWKS. Without
+        // these the handler fails closed and rejects every request.
+        USER_POOL_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-id`),
+        USER_POOL_CLIENT_ID: cdk.Fn.importValue(
+          `invoiceiq-${stage}-user-pool-client-id`,
+        ),
       },
       deadLetterQueue: ingestionDlq,
       bundling: {
@@ -193,6 +199,12 @@ export class ComputeStack extends cdk.Stack {
         TABLE_NAME: table.tableName,
         DOCUMENTS_BUCKET: documentsBucket.bucketName,
         STAGE: stage,
+        // Required to verify incoming JWTs against the pool's JWKS. Without
+        // these the handler fails closed and rejects every request.
+        USER_POOL_ID: cdk.Fn.importValue(`invoiceiq-${stage}-user-pool-id`),
+        USER_POOL_CLIENT_ID: cdk.Fn.importValue(
+          `invoiceiq-${stage}-user-pool-client-id`,
+        ),
       },
       deadLetterQueue: queryDlq,
       bundling: {

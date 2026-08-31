@@ -150,7 +150,41 @@ function getFileExtension(filename: string | undefined): string {
   return 'pdf';
 }
 
-// Maximum upload size: 5MB (Textract synchronous API limit)
+/**
+ * Content types we are willing to store, keyed by the allowlisted extension.
+ * A client may state its own type, but only if it agrees with the extension we
+ * derived; otherwise we fall back to the canonical type for that extension.
+ */
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string[]> = {
+  pdf: ['application/pdf'],
+  png: ['image/png'],
+  jpg: ['image/jpeg', 'image/jpg'],
+  jpeg: ['image/jpeg', 'image/jpg'],
+  tiff: ['image/tiff'],
+  tif: ['image/tiff'],
+};
+
+function resolveContentType(
+  requested: string | undefined,
+  ext: string,
+): string | null {
+  const allowed = CONTENT_TYPE_BY_EXTENSION[ext];
+  if (!allowed) return null;
+
+  if (!requested) return allowed[0];
+
+  const normalised = requested.split(';')[0].trim().toLowerCase();
+  if (!allowed.includes(normalised)) return null;
+
+  // Return the caller's exact string, not a canonicalised form. content-type is
+  // part of the SigV4 signature, and the browser will send back precisely what
+  // it declared here — so rewriting the case or spelling (image/jpg to
+  // image/jpeg) would produce a signature mismatch and a 403 on upload.
+  return requested.trim();
+}
+
+// Maximum upload size, bounded by what one Lambda invocation can hold in memory
+// alongside the base64 payload sent to Bedrock.
 const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -168,11 +202,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return corsPreflightResponse() as APIGatewayProxyResult;
   }
 
-  // Authenticate
-  // KNOWN LIMITATION (demo): JWT is decoded but not cryptographically verified.
-  // In production, use aws-jwt-verify to validate against Cognito JWKS.
+  // Authenticate. The JWT signature, expiry, issuer and app-client binding are
+  // all verified against the Cognito pool's JWKS; see lib/jwt-verifier.ts.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const claims = authenticateRequest(event as any);
+  const claims = await authenticateRequest(event as any);
   if (!claims) {
     // Allow demo user in local dev
     if (process.env.STAGE !== 'local') {
@@ -467,14 +500,34 @@ async function handleUpload(
 ): Promise<APIGatewayProxyResult> {
   const body = event.body ? JSON.parse(event.body) : {};
   const filename = body.fileName as string | undefined;
-  const contentType = body.contentType as string | undefined;
+  const requestedContentType = body.contentType as string | undefined;
   const fileSize = body.size as number | undefined;
   const ext = getFileExtension(filename);
 
-  // Validate file size does not exceed Textract sync limit (5MB)
-  if (fileSize !== undefined && fileSize > MAX_UPLOAD_SIZE_BYTES) {
+  // The declared size is mandatory, because it becomes the exact Content-Length
+  // baked into the presigned URL's signature. Treating it as optional is what
+  // previously made the 5 MB cap unenforceable: omit `size` and no check ran.
+  if (typeof fileSize !== 'number' || !Number.isFinite(fileSize) || fileSize <= 0) {
     return error(
-      `File size (${Math.round(fileSize / 1024 / 1024 * 100) / 100} MB) exceeds the maximum allowed size of 5 MB.`,
+      'A positive file size must be provided to request an upload URL.',
+      400,
+    ) as APIGatewayProxyResult;
+  }
+
+  if (fileSize > MAX_UPLOAD_SIZE_BYTES) {
+    return error(
+      `File size (${Math.round((fileSize / 1024 / 1024) * 100) / 100} MB) exceeds the maximum allowed size of 5 MB.`,
+      400,
+    ) as APIGatewayProxyResult;
+  }
+
+  // Only sign a content type we are willing to store. Echoing back whatever the
+  // client asks for would let a caller stash arbitrary content (e.g. text/html)
+  // in the documents bucket under their own prefix.
+  const contentType = resolveContentType(requestedContentType, ext);
+  if (!contentType) {
+    return error(
+      'Unsupported content type. Allowed types are PDF, PNG, JPEG and TIFF.',
       400,
     ) as APIGatewayProxyResult;
   }
@@ -485,14 +538,15 @@ async function handleUpload(
   // S3 key following project convention
   const s3Key = `users/${userId}/invoices/${invoiceId}/original.${ext}`;
 
-  logger.info('Generating presigned upload URL', { invoiceId, s3Key });
+  logger.info('Generating presigned upload URL', { invoiceId, s3Key, fileSize });
 
-  // Generate presigned PUT URL with Content-Length condition to enforce 5MB limit
+  // content-length is part of the signature, so the upload must be exactly the
+  // size declared and validated above — not merely under some ceiling.
   const uploadUrl = await generatePresignedUploadUrl({
     key: s3Key,
-    contentType: contentType ?? `application/${ext === 'pdf' ? 'pdf' : ext}`,
+    contentType,
     expiresIn: 600, // 10 minutes
-    maxContentLength: MAX_UPLOAD_SIZE_BYTES,
+    contentLength: fileSize,
   });
 
   // Store initial status record
@@ -508,7 +562,7 @@ async function handleUpload(
       status: 'queued',
       sourceDocument: {
         s3Key,
-        mimeType: contentType ?? 'application/pdf',
+        mimeType: contentType,
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

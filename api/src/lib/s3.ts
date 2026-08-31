@@ -14,7 +14,20 @@ export interface PresignedUrlOptions {
   key: string;
   expiresIn?: number;
   contentType?: string;
-  maxContentLength?: number;
+  /**
+   * Exact byte length the upload must have. When set, `content-length` is added
+   * to the signed headers, so S3 rejects any request whose body length differs
+   * from this value.
+   *
+   * This replaced a `maxContentLength` option that was accepted and then never
+   * used, which meant the "5 MB limit" was advisory only: the caller passed a
+   * ceiling, nothing applied it, and the URL permitted an upload of any size.
+   * SigV4 cannot express a *range* on a presigned PUT — only an exact value —
+   * so the caller validates the client-declared size against its own ceiling
+   * and then pins it here. A client that declares 1 MB and sends 5 GB fails the
+   * signature check.
+   */
+  contentLength?: number;
 }
 
 export async function generatePresignedUploadUrl(
@@ -24,11 +37,19 @@ export async function generatePresignedUploadUrl(
     Bucket: options.bucket ?? DOCUMENTS_BUCKET,
     Key: options.key,
     ContentType: options.contentType ?? 'application/pdf',
+    ...(options.contentLength !== undefined
+      ? { ContentLength: options.contentLength }
+      : {}),
   });
+
+  const signableHeaders = new Set(['host', 'content-type']);
+  if (options.contentLength !== undefined) {
+    signableHeaders.add('content-length');
+  }
 
   return getSignedUrl(s3Client, command, {
     expiresIn: options.expiresIn ?? 300,
-    signableHeaders: new Set(['host', 'content-type']),
+    signableHeaders,
   });
 }
 

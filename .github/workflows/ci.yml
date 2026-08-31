@@ -10,7 +10,22 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      # packages/schema must be compiled before anything that imports it: its
+      # `types` entry points at dist/index.d.ts, and dist/ is gitignored. Without
+      # this, `@invoiceiq/schema` fails to resolve and every downstream use of
+      # `Invoice` degrades into an implicit-any error.
+      - name: Build schema package
+        run: npm run build --workspace packages/schema
       - name: Build web app
         run: npm run build --workspace web
+      # The api and infra workspaces were previously never compiled or tested in
+      # CI, so a type error in a Lambda handler or CDK stack first surfaced at
+      # `cdk deploy`.
+      - name: Typecheck api
+        run: npm run typecheck --workspace api
+      - name: Typecheck infra
+        run: npm run typecheck --workspace infra
       - name: Run schema tests
         run: npm run test --workspace packages/schema --if-present
+      - name: Run api tests
+        run: npm run test --workspace api

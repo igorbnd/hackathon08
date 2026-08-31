@@ -374,7 +374,7 @@ async function handleExport(
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
   // Authenticate user
-  const claims = authenticateRequest(event as any);
+  const claims = await authenticateRequest(event as any);
   if (!claims) {
     // Fall back to demo user in local mode
     if (process.env.STAGE === 'local') {
@@ -432,7 +432,7 @@ async function handleDeleteAccount(
   // a transaction log for reliable cleanup.
 
   // Authenticate user
-  const claims = authenticateRequest(event as any);
+  const claims = await authenticateRequest(event as any);
   if (!claims) {
     if (process.env.STAGE === 'local') {
       return error('Account deletion disabled in local mode', 403) as APIGatewayProxyResult;
