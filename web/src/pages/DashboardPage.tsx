@@ -1,6 +1,58 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getInvoices, type Invoice, type GetInvoicesParams } from '../lib/api';
+import {
+  getInvoices,
+  loadSampleData,
+  exportMyData,
+  type Invoice,
+  type GetInvoicesParams,
+} from '../lib/api';
+
+// ─── Due date helpers ────────────────────────────────────────────────────────
+
+type DueStatus =
+  | { kind: 'overdue'; days: number }
+  | { kind: 'due-soon'; days: number }
+  | null;
+
+/**
+ * Classify an invoice by how close its due date is.
+ * Only unpaid invoices are considered — a paid invoice cannot be overdue.
+ */
+function getDueStatus(invoice: Invoice): DueStatus {
+  if (invoice.status !== 'unpaid' || !invoice.dueDate) return null;
+
+  const due = new Date(`${invoice.dueDate}T00:00:00`);
+  if (Number.isNaN(due.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+
+  if (diffDays < 0) return { kind: 'overdue', days: Math.abs(diffDays) };
+  if (diffDays <= 7) return { kind: 'due-soon', days: diffDays };
+  return null;
+}
+
+function DueBadge({ invoice }: { invoice: Invoice }) {
+  const due = getDueStatus(invoice);
+  if (!due) return null;
+
+  if (due.kind === 'overdue') {
+    return (
+      <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+        {due.days === 0 ? 'Due today' : `Overdue by ${due.days}d`}
+      </span>
+    );
+  }
+
+  return (
+    <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+      {due.days === 0 ? 'Due today' : `Due in ${due.days}d`}
+    </span>
+  );
+}
 
 // ─── Recommendation Badge Colors ─────────────────────────────────────────────
 
@@ -56,6 +108,11 @@ export function DashboardPage() {
 
   const [currentCursor, setCurrentCursor] = useState<string | undefined>();
 
+  // Sample data / export state
+  const [seeding, setSeeding] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [notice, setNotice] = useState('');
+
   const fetchInvoices = async (cursor?: string) => {
     setLoading(true);
     setError('');
@@ -101,13 +158,75 @@ export function DashboardPage() {
     setPrevCursors([]);
   };
 
+  const handleLoadSampleData = async () => {
+    setSeeding(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await loadSampleData();
+      setNotice(result.message ?? 'Sample data loaded');
+      setPrevCursors([]);
+      setCurrentCursor(undefined);
+      // Cursor is already undefined on a fresh account, so the effect will not
+      // re-fire — refetch explicitly.
+      await fetchInvoices(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sample data');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+    try {
+      const data = await exportMyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoiceiq-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Compute summary stats from available data
   const totalSpend = invoices.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
   const unpaidCount = invoices.filter((inv) => inv.status === 'unpaid').length;
+  const overdueCount = invoices.filter(
+    (inv) => getDueStatus(inv)?.kind === 'overdue',
+  ).length;
+  const hasActiveFilters = Boolean(vendor || status || dateFrom || dateTo);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <button
+          onClick={handleExport}
+          disabled={exporting || invoices.length === 0}
+          className="self-start rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
+        >
+          {exporting ? 'Exporting…' : 'Export my data'}
+        </button>
+      </div>
+
+      {/* Success notice */}
+      {notice && (
+        <div className="rounded-md bg-green-50 p-4" role="status" aria-live="polite">
+          <p className="text-sm text-green-800">{notice}</p>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -118,6 +237,11 @@ export function DashboardPage() {
         <div className="rounded-lg bg-white p-6 shadow">
           <p className="text-sm font-medium text-gray-600">Unpaid</p>
           <p className="mt-1 text-3xl font-semibold text-orange-600">{unpaidCount}</p>
+          {overdueCount > 0 && (
+            <p className="mt-1 text-xs font-semibold text-red-600">
+              {overdueCount} overdue
+            </p>
+          )}
         </div>
         <div className="rounded-lg bg-white p-6 shadow">
           <p className="text-sm font-medium text-gray-600">Total Spend</p>
@@ -215,9 +339,42 @@ export function DashboardPage() {
         {loading ? (
           <div className="p-8 text-center text-gray-600">Loading invoices...</div>
         ) : invoices.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">
-            No invoices found. <Link to="/upload" className="text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">Upload one</Link> to get started.
-          </div>
+          hasActiveFilters ? (
+            <div className="p-8 text-center text-gray-600">
+              No invoices match these filters. Try clearing them.
+            </div>
+          ) : (
+            <div className="p-10 text-center">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Your account is empty
+              </h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
+                Load a set of sample invoices to explore the app, or upload your own
+                document. Sample data is entirely fictional and covers every detection
+                the app performs — price rises, duplicates, overlapping subscriptions
+                and more.
+              </p>
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <button
+                  onClick={handleLoadSampleData}
+                  disabled={seeding}
+                  className="w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  {seeding ? 'Loading sample data…' : 'Load sample data'}
+                </button>
+                <Link
+                  to="/upload"
+                  className="w-full rounded-md border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:w-auto"
+                >
+                  Upload a document
+                </Link>
+              </div>
+              <p className="mt-4 text-xs text-gray-500">
+                Please do not upload personal or commercially sensitive documents to
+                this prototype.
+              </p>
+            </div>
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -258,9 +415,12 @@ export function DashboardPage() {
                       {(invoice.total ?? 0).toLocaleString('en-GB', { style: 'currency', currency: invoice.currency || 'GBP' })}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadgeClass(invoice.status)}`}>
-                        {invoice.status}
-                      </span>
+                      <div className="flex flex-col items-start">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadgeClass(invoice.status)}`}>
+                          {invoice.status}
+                        </span>
+                        <DueBadge invoice={invoice} />
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
                       {invoice.recommendation ? (

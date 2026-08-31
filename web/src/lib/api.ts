@@ -299,6 +299,29 @@ export async function updateInvoiceStatus(id: string, status: string): Promise<{
   return apiFetch(`/invoices/${id}/status`, { method: 'POST', body: { status } });
 }
 
+/**
+ * Load the curated sample invoice corpus into the current account.
+ * Safe to call more than once — records are overwritten, not duplicated.
+ */
+export async function loadSampleData(): Promise<{ message: string; count: number }> {
+  return apiFetch('/invoices/sample-data', { method: 'POST' });
+}
+
+// ─── Account / data ──────────────────────────────────────────────────────────
+
+export interface ExportResponse {
+  invoices: unknown[];
+  [key: string]: unknown;
+}
+
+/**
+ * Export every invoice belonging to the current user.
+ * Note: the API Gateway auth route is `POST /auth/{proxy+}`, so this must be a POST.
+ */
+export async function exportMyData(): Promise<ExportResponse> {
+  return apiFetch('/auth/export', { method: 'POST' });
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 export interface SearchResponse {
