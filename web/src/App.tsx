@@ -11,6 +11,7 @@ import { UploadPage } from './pages/UploadPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { SearchPage } from './pages/SearchPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
+import { AccountPage } from './pages/AccountPage';
 
 /**
  * Root route: signed-in users go straight to the dashboard, everyone else
@@ -96,6 +97,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <SubscriptionsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <AccountPage />
                 </Layout>
               </ProtectedRoute>
             }

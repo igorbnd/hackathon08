@@ -343,6 +343,14 @@ export async function exportMyData(): Promise<ExportResponse> {
   return apiFetch('/auth/export', { method: 'POST' });
 }
 
+/**
+ * Permanently delete the current user's account, invoices and documents.
+ * Irreversible — callers must confirm with the user first.
+ */
+export async function deleteAccount(): Promise<{ message: string }> {
+  return apiFetch('/auth/delete-account', { method: 'POST' });
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 export interface SearchResponse {

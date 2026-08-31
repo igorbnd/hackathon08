@@ -7,6 +7,7 @@ const navLinks = [
   { to: '/upload', label: 'Upload' },
   { to: '/search', label: 'Search' },
   { to: '/subscriptions', label: 'Subscriptions' },
+  { to: '/account', label: 'Account' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

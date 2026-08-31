@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import {
   getInvoices,
   loadSampleData,
-  exportMyData,
   type Invoice,
   type GetInvoicesParams,
 } from '../lib/api';
@@ -108,9 +107,8 @@ export function DashboardPage() {
 
   const [currentCursor, setCurrentCursor] = useState<string | undefined>();
 
-  // Sample data / export state
+  // Sample data state
   const [seeding, setSeeding] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState('');
 
   const fetchInvoices = async (cursor?: string) => {
@@ -177,29 +175,6 @@ export function DashboardPage() {
     }
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    setError('');
-    try {
-      const data = await exportMyData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `invoiceiq-export-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export data');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   // Compute summary stats from available data
   const totalSpend = invoices.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
   const unpaidCount = invoices.filter((inv) => inv.status === 'unpaid').length;
@@ -210,16 +185,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <button
-          onClick={handleExport}
-          disabled={exporting || invoices.length === 0}
-          className="self-start rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
-        >
-          {exporting ? 'Exporting…' : 'Export my data'}
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
 
       {/* Success notice */}
       {notice && (
