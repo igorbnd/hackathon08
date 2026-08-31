@@ -296,10 +296,15 @@ async function writeInvoiceRecords(userId: string): Promise<void> {
       return {
         PK: `USER#${userId}`,
         SK: `INV#${invoice.invoiceId}`,
-	GSI1PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
-	GSI1SK: `DATE#${invoice.issueDate}`,
-	GSI2PK: `USER#${userId}#DATE`,
-	GSI2SK: `DATE#${invoice.issueDate}`,
+        // Sort keys must be BARE values, matching the builders in
+        // api/src/lib/dynamodb.ts. A `DATE#` prefix breaks date-range queries:
+        // the query handler filters with skBetween('1970-01-01', '9999-12-31~'),
+        // and 'D' sorts above '9', so prefixed keys fall outside the range and
+        // return nothing.
+        GSI1PK: `USER#${userId}#VENDOR#${invoice.vendorId}`,
+        GSI1SK: invoice.issueDate,
+        GSI2PK: `USER#${userId}#DATE`,
+        GSI2SK: `${invoice.issueDate}#${invoice.invoiceId}`,
         invoiceId: invoice.invoiceId,
         vendorId: invoice.vendorId,
         vendorName: invoice.vendorName,
