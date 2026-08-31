@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { PasswordInput } from '../components/PasswordInput';
 
 export function SignupPage() {
   const [email, setEmail] = useState('');
@@ -97,38 +98,26 @@ export function SignupPage() {
                 placeholder="you@example.com"
               />
             </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                placeholder="At least 8 characters"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Repeat your password"
-              />
-            </div>
+            <PasswordInput
+              id="password"
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              placeholder="At least 8 characters"
+              hint="Must be at least 8 characters and include upper case, lower case and a number."
+            />
+            <PasswordInput
+              id="confirmPassword"
+              label="Confirm password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
+              required
+              placeholder="Repeat your password"
+            />
           </div>
 
           <button

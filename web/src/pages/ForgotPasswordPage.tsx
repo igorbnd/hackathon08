@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { forgotPassword, confirmForgotPassword } from '../lib/api';
+import { PasswordInput } from '../components/PasswordInput';
 
 type Step = 'request' | 'confirm';
 
@@ -150,50 +151,27 @@ export function ForgotPasswordPage() {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="new-password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                New password
-              </label>
-              <input
-                id="new-password"
-                name="new-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={8}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={inputClass}
-                placeholder="At least 8 characters"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Must be at least 8 characters and include upper case, lower case and a
-                number.
-              </p>
-            </div>
+            <PasswordInput
+              id="new-password"
+              label="New password"
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              placeholder="At least 8 characters"
+              hint="Must be at least 8 characters and include upper case, lower case and a number."
+            />
 
-            <div>
-              <label
-                htmlFor="confirm-password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Confirm new password
-              </label>
-              <input
-                id="confirm-password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={inputClass}
-                placeholder="Re-enter your new password"
-              />
-            </div>
+            <PasswordInput
+              id="confirm-password"
+              label="Confirm new password"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              autoComplete="new-password"
+              required
+              placeholder="Re-enter your new password"
+            />
 
             <button
               type="submit"
