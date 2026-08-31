@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getInvoices,
@@ -9,6 +9,12 @@ import {
 import { SpendChart } from '../components/SpendChart';
 
 // ─── Due date helpers ────────────────────────────────────────────────────────
+
+/** A selectable vendor in the filter dropdown. `id` is the vendor slug. */
+interface VendorOption {
+  id: string;
+  name: string;
+}
 
 type DueStatus =
   | { kind: 'overdue'; days: number }
@@ -112,6 +118,9 @@ export function DashboardPage() {
   const [seeding, setSeeding] = useState(false);
   const [notice, setNotice] = useState('');
 
+  // Vendor filter options, held separately from `invoices`
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+
   const fetchInvoices = async (cursor?: string) => {
     setLoading(true);
     setError('');
@@ -137,6 +146,44 @@ export function DashboardPage() {
     fetchInvoices(currentCursor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCursor, vendor, status, dateFrom, dateTo]);
+
+  /**
+   * Build the vendor dropdown options.
+   *
+   * This deliberately issues its own UNFILTERED request rather than deriving
+   * options from `invoices`. Deriving them would collapse the dropdown to a
+   * single option the moment a vendor was selected, making it impossible to
+   * switch to a different vendor or back to "All".
+   *
+   * TRADE-OFF: this reads up to 200 invoices to collect distinct vendors. A
+   * dedicated "list my vendors" endpoint would be the proper fix; this is
+   * adequate at prototype data volumes and needs no backend change.
+   */
+  const loadVendorOptions = useCallback(async () => {
+    try {
+      const response = await getInvoices({ limit: 200 });
+
+      const byId = new Map<string, string>();
+      for (const inv of response.invoices) {
+        if (inv.vendorId && !byId.has(inv.vendorId)) {
+          byId.set(inv.vendorId, inv.vendorName || inv.vendorId);
+        }
+      }
+
+      setVendorOptions(
+        [...byId.entries()]
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    } catch {
+      // Non-critical: the dropdown falls back to "All vendors" only.
+      // Deliberately not surfaced as a page error.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadVendorOptions();
+  }, [loadVendorOptions]);
 
   const handleNext = () => {
     if (nextCursor) {
@@ -169,6 +216,8 @@ export function DashboardPage() {
       // Cursor is already undefined on a fresh account, so the effect will not
       // re-fire — refetch explicitly.
       await fetchInvoices(undefined);
+      // Seeding introduces new vendors, so rebuild the filter options.
+      await loadVendorOptions();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sample data');
     } finally {
@@ -236,14 +285,19 @@ export function DashboardPage() {
             <label htmlFor="filter-vendor" className="block text-sm font-medium text-gray-700">
               Vendor
             </label>
-            <input
+            <select
               id="filter-vendor"
-              type="text"
               value={vendor}
               onChange={(e) => setVendor(e.target.value)}
-              placeholder="Filter by vendor"
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            >
+              <option value="">All vendors</option>
+              {vendorOptions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700">
