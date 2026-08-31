@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './lib/auth';
+import { AuthProvider, useAuth } from './lib/auth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
@@ -11,13 +11,29 @@ import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { SearchPage } from './pages/SearchPage';
 import { SubscriptionsPage } from './pages/SubscriptionsPage';
 
+/**
+ * Root route: signed-in users go straight to the dashboard, everyone else
+ * sees the public landing page.
+ *
+ * Rendered inside AuthProvider, so useAuth is available here.
+ */
+function LandingRoute() {
+  const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <LandingPage />;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
           {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingRoute />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 

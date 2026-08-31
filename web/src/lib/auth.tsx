@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import * as api from './api';
 
 // ─── JWT Decode (base64url) ──────────────────────────────────────────────────
@@ -45,23 +45,28 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ─── Auth Provider ───────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-
-  // Initialize from stored token on mount
-  useEffect(() => {
+  // Initialise synchronously from stored token during the first render.
+  //
+  // This must NOT be done in useEffect: child effects run before parent effects
+  // in React, so a route guard (ProtectedRoute) or a redirect on `/` would read
+  // `isAuthenticated === false` and navigate away before this provider had a
+  // chance to restore the session. localStorage is synchronous, so a lazy
+  // useState initialiser gives us the correct value on the very first render.
+  const [user, setUser] = useState<User | null>(() => {
     const token = localStorage.getItem('idToken');
-    if (token) {
-      const payload = decodeJwt(token);
-      if (payload && payload.exp * 1000 > Date.now()) {
-        setUser({ sub: payload.sub, email: payload.email });
-      } else {
-        // Token expired, clear storage
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('idToken');
-        localStorage.removeItem('refreshToken');
-      }
+    if (!token) return null;
+
+    const payload = decodeJwt(token);
+    if (payload && payload.exp * 1000 > Date.now()) {
+      return { sub: payload.sub, email: payload.email };
     }
-  }, []);
+
+    // Token missing or expired — clear stale storage
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('idToken');
+    localStorage.removeItem('refreshToken');
+    return null;
+  });
 
   const login = useCallback(async (email: string, password: string) => {
     const tokens = await api.signin({ email, password });
