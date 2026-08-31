@@ -265,6 +265,12 @@ export class ComputeStack extends cdk.Stack {
       target: `integrations/${ingestionIntegration.ref}`,
     });
 
+    new apigatewayv2.CfnRoute(this, 'UpdateInvoiceRoute', {
+      apiId: httpApi.ref,
+      routeKey: 'PATCH /invoices/{id}',
+      target: `integrations/${ingestionIntegration.ref}`,
+    });
+
     new apigatewayv2.CfnRoute(this, 'DeleteInvoiceRoute', {
       apiId: httpApi.ref,
       routeKey: 'DELETE /invoices/{id}',

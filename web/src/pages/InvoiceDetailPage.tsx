@@ -1,6 +1,42 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getInvoice, deleteInvoice, updateInvoiceStatus, type InvoiceDetailResponse, type Delta } from '../lib/api';
+import {
+  getInvoice,
+  deleteInvoice,
+  updateInvoiceStatus,
+  updateInvoice,
+  type InvoiceDetailResponse,
+  type InvoiceCorrections,
+  type Delta,
+} from '../lib/api';
+
+/** Form model for corrections — all values held as strings while editing. */
+interface CorrectionForm {
+  vendorName: string;
+  referenceNumber: string;
+  issueDate: string;
+  dueDate: string;
+  category: string;
+  currency: string;
+  subtotal: string;
+  vatAmount: string;
+  total: string;
+}
+
+const emptyForm: CorrectionForm = {
+  vendorName: '',
+  referenceNumber: '',
+  issueDate: '',
+  dueDate: '',
+  category: '',
+  currency: '',
+  subtotal: '',
+  vatAmount: '',
+  total: '',
+};
+
+const fieldClass =
+  'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500';
 
 function getRecommendationColor(type: string): { bg: string; text: string; border: string } {
   switch (type?.toUpperCase()) {
@@ -48,6 +84,15 @@ export function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Correction (edit) state.
+  // saveError is deliberately separate from `error`: the page renders a
+  // "not found" view whenever `error` is set, so reusing it for save failures
+  // would destroy the page instead of showing an inline message.
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [form, setForm] = useState<CorrectionForm>(emptyForm);
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -76,6 +121,77 @@ export function InvoiceDetailPage() {
       setData(updated);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  const handleStartEdit = () => {
+    if (!data) return;
+    const inv = data.invoice;
+    setForm({
+      vendorName: inv.vendorName ?? '',
+      referenceNumber: inv.referenceNumber ?? '',
+      issueDate: inv.issueDate ?? '',
+      dueDate: inv.dueDate ?? '',
+      category: inv.category ?? '',
+      currency: inv.currency ?? 'GBP',
+      subtotal: String(inv.subtotal ?? ''),
+      vatAmount: String(inv.vatAmount ?? ''),
+      total: String(inv.total ?? ''),
+    });
+    setSaveError('');
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!id || !data) return;
+
+    const original = data.invoice;
+
+    // Send only what actually changed, so the server records an accurate list
+    // of corrected fields rather than marking everything as user-edited.
+    const corrections: InvoiceCorrections = {};
+    if (form.vendorName !== (original.vendorName ?? '')) corrections.vendorName = form.vendorName;
+    if (form.referenceNumber !== (original.referenceNumber ?? ''))
+      corrections.referenceNumber = form.referenceNumber;
+    if (form.issueDate !== (original.issueDate ?? '')) corrections.issueDate = form.issueDate;
+    if (form.dueDate !== (original.dueDate ?? '')) corrections.dueDate = form.dueDate;
+    if (form.category !== (original.category ?? '')) corrections.category = form.category;
+    if (form.currency !== (original.currency ?? '')) corrections.currency = form.currency;
+
+    const numeric: Array<['subtotal' | 'vatAmount' | 'total', string, number]> = [
+      ['subtotal', form.subtotal, original.subtotal],
+      ['vatAmount', form.vatAmount, original.vatAmount],
+      ['total', form.total, original.total],
+    ];
+    for (const [key, raw, originalValue] of numeric) {
+      if (raw.trim() === '') continue;
+      const parsed = Number(raw);
+      if (Number.isNaN(parsed)) {
+        setSaveError(`${key} must be a number`);
+        return;
+      }
+      if (parsed !== originalValue) corrections[key] = parsed;
+    }
+
+    if (Object.keys(corrections).length === 0) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    setSaveError('');
+    try {
+      await updateInvoice(id, corrections);
+      // Refetch rather than trusting the local copy — correcting the vendor or
+      // date re-indexes the record and invalidates the cached recommendation,
+      // so the server response is the source of truth.
+      const refreshed = await getInvoice(id);
+      setData(refreshed);
+      setEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save corrections');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,13 +242,21 @@ export function InvoiceDetailPage() {
             }`}>
               {invoice.status}
             </span>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {invoice.status !== 'paid' && (
                 <button
                   onClick={handleMarkAsPaid}
                   className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
                 >
                   Mark as Paid
+                </button>
+              )}
+              {!editing && (
+                <button
+                  onClick={handleStartEdit}
+                  className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Correct details
                 </button>
               )}
               <button
@@ -142,6 +266,9 @@ export function InvoiceDetailPage() {
                 Delete
               </button>
             </div>
+            {Boolean((invoice.metadata as Record<string, unknown>)?.userCorrected) && (
+              <p className="mt-2 text-xs text-gray-500">Manually corrected</p>
+            )}
           </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -159,6 +286,171 @@ export function InvoiceDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Correction form */}
+      {editing && (
+        <div className="rounded-lg border-2 border-indigo-200 bg-indigo-50 p-6">
+          <h2 className="text-lg font-medium text-gray-900">
+            Correct extracted details
+          </h2>
+          <p className="mt-1 text-sm text-gray-700">
+            AI extraction is not always right. Fix anything that does not match the
+            original document.
+          </p>
+
+          {saveError && (
+            <div className="mt-4 rounded-md bg-red-50 p-3" role="alert" aria-live="polite">
+              <p className="text-sm text-red-800">{saveError}</p>
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="f-vendor" className="block text-sm font-medium text-gray-700">
+                Vendor name
+              </label>
+              <input
+                id="f-vendor"
+                type="text"
+                value={form.vendorName}
+                onChange={(e) => setForm({ ...form, vendorName: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-ref" className="block text-sm font-medium text-gray-700">
+                Reference number
+              </label>
+              <input
+                id="f-ref"
+                type="text"
+                value={form.referenceNumber}
+                onChange={(e) => setForm({ ...form, referenceNumber: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-issue" className="block text-sm font-medium text-gray-700">
+                Issue date
+              </label>
+              <input
+                id="f-issue"
+                type="date"
+                value={form.issueDate}
+                onChange={(e) => setForm({ ...form, issueDate: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-due" className="block text-sm font-medium text-gray-700">
+                Due date
+              </label>
+              <input
+                id="f-due"
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-category" className="block text-sm font-medium text-gray-700">
+                Category
+              </label>
+              <input
+                id="f-category"
+                type="text"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-currency" className="block text-sm font-medium text-gray-700">
+                Currency
+              </label>
+              <input
+                id="f-currency"
+                type="text"
+                maxLength={3}
+                value={form.currency}
+                onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
+                className={fieldClass}
+                placeholder="GBP"
+              />
+            </div>
+            <div>
+              <label htmlFor="f-subtotal" className="block text-sm font-medium text-gray-700">
+                Subtotal
+              </label>
+              <input
+                id="f-subtotal"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.subtotal}
+                onChange={(e) => setForm({ ...form, subtotal: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-vat" className="block text-sm font-medium text-gray-700">
+                VAT amount
+              </label>
+              <input
+                id="f-vat"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.vatAmount}
+                onChange={(e) => setForm({ ...form, vatAmount: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="f-total" className="block text-sm font-medium text-gray-700">
+                Total
+              </label>
+              <input
+                id="f-total"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.total}
+                onChange={(e) => setForm({ ...form, total: e.target.value })}
+                className={fieldClass}
+              />
+            </div>
+          </div>
+
+          <div className="mt-5 flex gap-3">
+            <button
+              onClick={handleSaveEdit}
+              disabled={saving}
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save corrections'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setSaveError('');
+              }}
+              disabled={saving}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <p className="mt-4 border-t border-indigo-200 pt-3 text-xs leading-relaxed text-gray-600">
+            Line items cannot be edited yet. Correcting the vendor name regroups this
+            invoice with that vendor&rsquo;s history, and any saved change causes the AI
+            recommendation to be regenerated on next view. Corrections apply to this
+            invoice only — they are not yet reused to improve future extractions.
+          </p>
+        </div>
+      )}
 
       {/* Line Items Table */}
       <div className="rounded-lg bg-white shadow">

@@ -320,6 +320,31 @@ export async function updateInvoiceStatus(id: string, status: string): Promise<{
   return apiFetch(`/invoices/${id}/status`, { method: 'POST', body: { status } });
 }
 
+/** Fields a user may correct on an extracted invoice. */
+export interface InvoiceCorrections {
+  vendorName?: string;
+  issueDate?: string;
+  dueDate?: string;
+  referenceNumber?: string;
+  category?: string;
+  currency?: string;
+  subtotal?: number;
+  vatAmount?: number;
+  total?: number;
+}
+
+/**
+ * Apply user corrections to an invoice.
+ * Correcting the vendor name or issue date re-indexes the record server-side,
+ * and invalidates any cached AI recommendation.
+ */
+export async function updateInvoice(
+  id: string,
+  corrections: InvoiceCorrections,
+): Promise<{ message: string; invoice: Invoice }> {
+  return apiFetch(`/invoices/${id}`, { method: 'PATCH', body: corrections });
+}
+
 /**
  * Load the curated sample invoice corpus into the current account.
  * Safe to call more than once — records are overwritten, not duplicated.

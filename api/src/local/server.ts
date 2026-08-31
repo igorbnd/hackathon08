@@ -19,6 +19,7 @@ app.post('/invoices/upload', lambdaAdapter(ingestionHandler));
 app.post('/invoices/sample-data', lambdaAdapter(ingestionHandler));
 app.post('/invoices/:id/process', lambdaAdapter(ingestionHandler));
 app.get('/invoices/:id/status', lambdaAdapter(ingestionHandler));
+app.patch('/invoices/:id', lambdaAdapter(ingestionHandler));
 app.delete('/invoices/:id', lambdaAdapter(ingestionHandler));
 
 // Query routes

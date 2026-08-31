@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import {
   S3Client,
   ListObjectsV2Command,
@@ -223,6 +224,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return await handleUpdateStatus(invoiceId, userId, event, logger);
     }
 
+    // Route: PATCH /invoices/{id} — apply user corrections
+    if (method === 'PATCH') {
+      const invoiceId = extractPathParam(path, '/invoices');
+      if (!invoiceId) {
+        return error('Missing invoice ID', 400) as APIGatewayProxyResult;
+      }
+      return await handleUpdateInvoice(invoiceId, userId, event, logger);
+    }
+
     // Route: DELETE /invoices/{id}
     if (method === 'DELETE') {
       const invoiceId = extractPathParam(path, '/invoices');
@@ -238,6 +248,141 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return error('Internal server error', 500) as APIGatewayProxyResult;
   }
 };
+
+// ─── Update / Correct Invoice Endpoint ──────────────────────────────────────
+
+/**
+ * Fields a user is allowed to correct.
+ *
+ * SCOPE NOTE: line items are deliberately not editable yet. Correcting a header
+ * field is the common case (vendor name, dates, totals misread by extraction),
+ * and editing a variable-length array of line items is a materially larger
+ * piece of work. See README for what is and is not implemented.
+ */
+const UpdateInvoiceSchema = z
+  .object({
+    vendorName: z.string().min(1, 'Vendor name cannot be empty').optional(),
+    issueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'issueDate must be YYYY-MM-DD')
+      .optional(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'dueDate must be YYYY-MM-DD')
+      .optional(),
+    referenceNumber: z.string().min(1, 'Reference cannot be empty').optional(),
+    category: z.string().min(1, 'Category cannot be empty').optional(),
+    currency: z.string().length(3, 'Currency must be a 3-letter code').optional(),
+    subtotal: z.number().nonnegative().optional(),
+    vatAmount: z.number().nonnegative().optional(),
+    total: z.number().nonnegative().optional(),
+  })
+  .refine((obj) => Object.keys(obj).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
+/**
+ * Apply user corrections to an extracted invoice.
+ *
+ * Two things here are easy to get wrong and are handled explicitly:
+ *
+ * 1. GSI keys encode vendor and issue date. Correcting either one without
+ *    recomputing GSI1PK / GSI1SK / GSI2SK would leave the record indexed under
+ *    its old vendor or date, breaking vendor history and date-range queries.
+ *
+ * 2. Bumping `updatedAt` invalidates any cached recommendation, because the
+ *    query handler only reuses a cached verdict when
+ *    `recommendationGeneratedAt >= updatedAt`. A corrected invoice therefore
+ *    gets re-analysed on next view, which is the behaviour we want.
+ */
+async function handleUpdateInvoice(
+  invoiceId: string,
+  userId: string,
+  event: APIGatewayProxyEvent,
+  logger: ReturnType<typeof createLogger>,
+): Promise<APIGatewayProxyResult> {
+  let body: unknown;
+  try {
+    body = event.body ? JSON.parse(event.body) : {};
+  } catch {
+    return error('Invalid JSON body', 400) as APIGatewayProxyResult;
+  }
+
+  const validation = UpdateInvoiceSchema.safeParse(body);
+  if (!validation.success) {
+    return error(
+      validation.error.issues.map((i) => i.message).join('; '),
+      400,
+    ) as APIGatewayProxyResult;
+  }
+
+  const updates = validation.data;
+
+  const existing = await getItem({
+    pk: buildPK(userId),
+    sk: buildSK(invoiceId),
+  });
+
+  if (!existing) {
+    return error('Invoice not found', 404) as APIGatewayProxyResult;
+  }
+
+  if (existing.userId && existing.userId !== userId) {
+    return error('Forbidden', 403) as APIGatewayProxyResult;
+  }
+
+  const now = new Date().toISOString();
+
+  // Re-derive the vendor slug when the display name is corrected, so a fix like
+  // "BRITISH GAS" -> "British Gas Trading Ltd" regroups the invoice correctly.
+  const vendorId = updates.vendorName
+    ? normaliseVendorName(updates.vendorName)
+    : (existing.vendorId as string);
+
+  const issueDate = updates.issueDate ?? (existing.issueDate as string);
+
+  const previousMetadata = (existing.metadata as Record<string, unknown>) ?? {};
+  const previouslyCorrected = Array.isArray(previousMetadata.correctedFields)
+    ? (previousMetadata.correctedFields as string[])
+    : [];
+
+  const updatedRecord = {
+    ...existing,
+    ...updates,
+    vendorId,
+
+    // Recomputed because they encode vendor and date
+    GSI1PK: buildGSI1PK(userId, vendorId),
+    GSI1SK: buildGSI1SK(issueDate),
+    GSI2PK: buildGSI2PK(userId),
+    GSI2SK: buildGSI2SK(issueDate, invoiceId),
+
+    metadata: {
+      ...previousMetadata,
+      userCorrected: true,
+      correctedFields: [
+        ...new Set([...previouslyCorrected, ...Object.keys(updates)]),
+      ],
+      lastCorrectedAt: now,
+    },
+
+    updatedAt: now,
+  };
+
+  await putItem({ item: updatedRecord });
+
+  logger.info('Invoice corrected', {
+    invoiceId,
+    userId,
+    correctedFields: Object.keys(updates),
+    vendorRegrouped: Boolean(updates.vendorName),
+  });
+
+  return success({
+    message: 'Invoice updated',
+    invoice: updatedRecord,
+  }) as APIGatewayProxyResult;
+}
 
 // ─── Sample Data Endpoint ───────────────────────────────────────────────────
 
