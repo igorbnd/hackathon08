@@ -551,6 +551,7 @@ This is a hackathon prototype, not a commercial product. The gaps below are know
 | **Line items are not editable** | You can correct header fields (vendor, dates, totals, currency, status) but not individual line items. The correction form states this in the UI rather than hiding it. |
 | **Corrections are not reused** | Fixing a field updates that one invoice only. There is no feedback loop back into the extraction prompt, so the same vendor can be misread the same way twice. |
 | **Relaxed auth for a prototype** | Sign-up auto-confirms accounts with no email verification, so anyone can register with any address. Fine for a demo, unacceptable for real data. |
+| **WAF protects the CloudFront path only** | The web ACL is CloudFront-scoped, and the SPA reaches the API same-origin through the `/api/*` behaviour, so normal traffic is covered. The API Gateway execute-api endpoint stays publicly addressable, and requests sent straight to it bypass the managed rules and the per-IP rate limit. HTTP APIs cannot have a WAF attached directly, so closing this needs a CloudFront shared-secret header checked in the handlers. |
 | **Single region, no backups** | Everything lives in `eu-west-2` (except the CloudFront certificate and WAF, which must be in `us-east-1`). No cross-region replication, no point-in-time recovery, no disaster-recovery plan. |
 | **No multi-tenancy beyond user partitioning** | Data is isolated by DynamoDB partition key per user. There are no organisations, no shared workspaces, no roles. |
 | **Recommendations are advisory only** | The AI suggests an action and a confidence score. Nothing is ever paid, cancelled or actioned automatically, and the output should not be treated as financial advice. |
@@ -579,13 +580,31 @@ This is a hackathon prototype, not a commercial product. The gaps below are know
   - AmazonIpReputationList
   - Rate limiting (2,000 req/5min per IP)
 - **HTTPS only** via CloudFront (HTTP redirects to HTTPS, TLS 1.2 minimum).
-- **CORS** restricted to known origins.
+- **CORS** currently responds `Access-Control-Allow-Origin: *`. The SPA calls the
+  API same-origin through the CloudFront `/api/*` behaviour, so it does not rely
+  on this; it should be narrowed to the known origin. Credentials are sent as a
+  bearer header rather than a cookie, so a third-party origin cannot ride on an
+  authenticated session.
 
 ### Authentication
 
 - **Amazon Cognito** user pools with email + password sign-in.
-- **JWT authorizer** on all API Gateway routes except `/auth/*`.
-- **No secrets in code** - all secrets via SSM Parameter Store SecureString.
+- **JWTs are verified in the Lambda handlers** against the user pool's JWKS —
+  RS256 signature, `exp`/`nbf`, issuer, and app-client binding
+  (`client_id` on access tokens, `aud` on ID tokens). `alg` is pinned to RS256,
+  so `alg: none` and HMAC-confusion tokens are rejected. See
+  [`api/src/lib/jwt-verifier.ts`](api/src/lib/jwt-verifier.ts).
+- Verification **fails closed**: if `USER_POOL_ID` is not configured, no request
+  is authenticated rather than falling back to trusting the token.
+- Every data access is additionally scoped to `PK = USER#{userId}` in DynamoDB,
+  so a valid token for user A cannot address user B's records.
+- A Cognito **JWT authorizer on the HTTP API** would be stronger still, rejecting
+  bad tokens at the edge before any Lambda is invoked. It is not yet in place
+  because the user pool is not managed by this CDK app.
+- **No secrets in code.** Configuration reaches Lambda through environment
+  variables populated from CloudFormation exports; there are no application
+  secrets to store. Signing keys are fetched from Cognito's public JWKS endpoint
+  and cached in memory.
 
 ### Logging and PII
 

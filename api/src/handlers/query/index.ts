@@ -15,6 +15,7 @@ import { success, error, corsPreflightResponse } from '../../lib/response.js';
 import { createLogger } from '../../lib/logger.js';
 import { RECOMMENDATION_PROMPT, SEARCH_PROMPT } from '../../lib/prompts.js';
 import type { Invoice } from '@invoiceiq/schema';
+import { z } from 'zod';
 
 // ─── Handler Entry Point ────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ async function handleListInvoices(
   event: APIGatewayProxyEvent,
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
-  const userId = getUserIdFromRequest(event as any);
+  const userId = await getUserIdFromRequest(event as any);
   if (!userId) {
     return error('Unauthorized', 401) as APIGatewayProxyResult;
   }
@@ -191,7 +192,7 @@ async function handleGetInvoice(
   event: APIGatewayProxyEvent,
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
-  const userId = getUserIdFromRequest(event as any);
+  const userId = await getUserIdFromRequest(event as any);
   if (!userId) {
     return error('Unauthorized', 401) as APIGatewayProxyResult;
   }
@@ -294,7 +295,7 @@ async function handleQuery(
   event: APIGatewayProxyEvent,
   logger: ReturnType<typeof createLogger>,
 ): Promise<APIGatewayProxyResult> {
-  const userId = getUserIdFromRequest(event as any);
+  const userId = await getUserIdFromRequest(event as any);
   if (!userId) {
     return error('Unauthorized', 401) as APIGatewayProxyResult;
   }
@@ -321,6 +322,9 @@ async function handleQuery(
 
 // ─── Natural Language Search ────────────────────────────────────────────────
 
+/** Upper bound on a search query, to cap Bedrock input token cost per request. */
+const MAX_SEARCH_QUERY_LENGTH = 500;
+
 async function handleNaturalLanguageSearch(
   userId: string,
   query: string,
@@ -328,6 +332,16 @@ async function handleNaturalLanguageSearch(
 ): Promise<APIGatewayProxyResult> {
   if (!query.trim()) {
     return error('Query string is required', 400) as APIGatewayProxyResult;
+  }
+
+  // Cap the query before it reaches Bedrock. The text is billed per input token,
+  // so an unbounded string is a cost amplification lever: one request could carry
+  // megabytes of prompt. No genuine search needs more than a couple of sentences.
+  if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+    return error(
+      `Search query is too long (${query.length} characters). The maximum is ${MAX_SEARCH_QUERY_LENGTH}.`,
+      400,
+    ) as APIGatewayProxyResult;
   }
 
   logger.info('Processing natural language search', { userId, query });
@@ -347,13 +361,24 @@ async function handleNaturalLanguageSearch(
     if (content.startsWith('```')) {
       content = content.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
     }
-    parsedFilters = JSON.parse(content);
+    const validated = SearchResponseSchema.safeParse(JSON.parse(content));
+    if (!validated.success) {
+      logger.warn('AI search response failed schema validation', {
+        content: aiResponse.content,
+        issues: validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+      });
+      return error('Failed to interpret search query', 422) as APIGatewayProxyResult;
+    }
+    parsedFilters = validated.data;
   } catch {
     logger.warn('Failed to parse AI search response', { content: aiResponse.content });
     return error('Failed to interpret search query', 422) as APIGatewayProxyResult;
   }
 
-  const filters = parsedFilters.filters ?? {};
+  // No `?? {}` fallback needed: the schema defaults `filters` to an empty object,
+  // and coalescing against `{}` here would widen the type to a union that has no
+  // filter properties on one branch.
+  const filters = parsedFilters.filters;
   const interpretation = parsedFilters.interpretation ?? 'No interpretation available';
 
   // Execute the generated filters as DynamoDB queries
@@ -791,23 +816,46 @@ interface PriceTrend {
   averageAmount: number;
 }
 
-interface SearchFilters {
-  filters: {
-    vendor?: string;
-    vendorName?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    amountMin?: number;
-    amountMax?: number;
-    status?: string;
-    category?: string;
-    currency?: string;
-    recommendation?: string;
-  };
-  sortBy?: 'date' | 'amount' | 'vendor';
-  sortOrder?: 'asc' | 'desc';
-  interpretation?: string;
-}
+/**
+ * Shape of the search translation returned by the model.
+ *
+ * This is validated rather than cast, because the response is model output
+ * driven by a user-supplied query — the one place in the request path where
+ * loosely structured data reaches query construction. It was previously
+ * `JSON.parse` followed by a bare `as SearchFilters`, so a string where a number
+ * was expected (`amountMin: "100"`) silently produced nonsense comparisons, and
+ * a malformed date went straight into a GSI `BETWEEN` range.
+ *
+ * Individual fields use `.catch(undefined)` so one implausible value is dropped
+ * and the rest of the search still runs, rather than failing the whole query and
+ * showing the user an error for what is really a soft model mistake.
+ */
+const IsoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const SearchResponseSchema = z.object({
+  filters: z
+    .object({
+      vendor: z.string().min(1).max(120).optional().catch(undefined),
+      vendorName: z.string().min(1).max(200).optional().catch(undefined),
+      dateFrom: IsoDateString.optional().catch(undefined),
+      dateTo: IsoDateString.optional().catch(undefined),
+      amountMin: z.number().finite().optional().catch(undefined),
+      amountMax: z.number().finite().optional().catch(undefined),
+      status: z
+        .enum(['unpaid', 'paid', 'disputed', 'cancelled'])
+        .optional()
+        .catch(undefined),
+      category: z.string().min(1).max(80).optional().catch(undefined),
+      currency: z.string().length(3).optional().catch(undefined),
+      recommendation: z.string().min(1).max(60).optional().catch(undefined),
+    })
+    .default({}),
+  sortBy: z.enum(['date', 'amount', 'vendor']).optional().catch(undefined),
+  sortOrder: z.enum(['asc', 'desc']).optional().catch(undefined),
+  interpretation: z.string().max(1000).optional().catch(undefined),
+});
+
+type SearchFilters = z.infer<typeof SearchResponseSchema>;
 
 interface RecommendationResult {
   recommendation: string;

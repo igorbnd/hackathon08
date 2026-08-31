@@ -1,31 +1,10 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { verifyCognitoJwt } from './jwt-verifier.js';
 
 export interface AuthClaims {
   userId: string;
   email: string;
   sub: string;
-}
-
-/**
- * Decode a base64url encoded string.
- */
-function base64UrlDecode(str: string): string {
-  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-  return Buffer.from(padded, 'base64').toString('utf-8');
-}
-
-/**
- * Decode JWT payload without verification (for demo/local dev).
- * In production, use a proper JWT verification library with JWKS.
- */
-function decodeJwtPayload(token: string): Record<string, unknown> {
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    throw new Error('Invalid JWT format');
-  }
-  const payload = base64UrlDecode(parts[1]);
-  return JSON.parse(payload);
 }
 
 /**
@@ -39,16 +18,22 @@ function extractBearerToken(authHeader: string | undefined): string | null {
 }
 
 /**
- * Authenticate request by extracting and validating JWT from Authorization header.
- * Returns user claims (userId, email) on success.
+ * Authenticate a request by cryptographically verifying the Cognito JWT in the
+ * Authorization header. Returns the caller's claims, or null if the token is
+ * missing, malformed, expired, or not signed by our user pool.
  *
- * KNOWN LIMITATION (demo): This performs base64 decode only, without cryptographic
- * signature verification. In production, use aws-jwt-verify to validate the JWT
- * against Cognito JWKS (verifying iss, aud, exp, and signature).
+ * This previously base64-decoded the payload and trusted it without verifying
+ * the signature, which meant any client could mint `{"sub": "<victim>"}` and
+ * read, edit or delete another user's invoices. Every downstream handler scopes
+ * its DynamoDB access to `USER#{userId}`, so the correctness of that isolation
+ * rests entirely on this function. See jwt-verifier.ts for the checks applied.
+ *
+ * Fails closed: if the user pool is not configured, no request is authenticated
+ * (except in local dev, handled by getUserIdFromRequest).
  */
-export function authenticateRequest(
+export async function authenticateRequest(
   event: APIGatewayProxyEventV2,
-): AuthClaims | null {
+): Promise<AuthClaims | null> {
   const authHeader =
     event.headers?.['authorization'] ?? event.headers?.['Authorization'];
   const token = extractBearerToken(authHeader);
@@ -57,41 +42,55 @@ export function authenticateRequest(
     return null;
   }
 
-  try {
-    const payload = decodeJwtPayload(token);
-
-    const sub = (payload.sub as string) ?? '';
-    const email = (payload.email as string) ?? '';
-
-    if (!sub) {
-      return null;
+  const userPoolId = process.env.USER_POOL_ID;
+  if (!userPoolId) {
+    // Misconfiguration, not an auth failure. Refusing the request is the only
+    // safe response — the alternative is silently trusting unverified tokens,
+    // which is the bug this function exists to fix.
+    //
+    // Local dev legitimately runs without a pool configured, so this is only
+    // worth shouting about in a deployed stage.
+    if (process.env.STAGE !== 'local') {
+      console.error(
+        JSON.stringify({
+          level: 'ERROR',
+          message: 'USER_POOL_ID is not set; refusing to authenticate request',
+        }),
+      );
     }
-
-    return {
-      userId: sub,
-      email,
-      sub,
-    };
-  } catch {
     return null;
   }
+
+  const claims = await verifyCognitoJwt(token, {
+    userPoolId,
+    clientId: process.env.USER_POOL_CLIENT_ID,
+  });
+
+  if (!claims) {
+    return null;
+  }
+
+  return {
+    userId: claims.sub,
+    email: claims.email,
+    sub: claims.sub,
+  };
 }
 
 /**
- * Get userId from request, falling back to demo user for local development.
+ * Get userId from request, falling back to a demo user for local development.
+ *
+ * The local fallback is gated on STAGE === 'local', which is set only by the
+ * local Express adapter. It is never set in any deployed stage.
  */
-export function getUserIdFromRequest(
+export async function getUserIdFromRequest(
   event: APIGatewayProxyEventV2,
-): string | null {
-  const claims = authenticateRequest(event);
-  if (claims) {
-    return claims.userId;
-  }
-
-  // In local dev mode, allow demo user
+): Promise<string | null> {
   if (process.env.STAGE === 'local') {
-    return 'demo-user-001';
+    const claims = await authenticateRequest(event).catch(() => null);
+    return claims?.userId ?? 'demo-user-001';
   }
 
-  return null;
+  const claims = await authenticateRequest(event);
+  return claims?.userId ?? null;
 }
