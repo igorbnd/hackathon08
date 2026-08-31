@@ -30,8 +30,16 @@ export function SignupPage() {
     setLoading(true);
 
     try {
-      await signup(email, password);
-      setSuccess('Account created successfully! Redirecting to sign in...');
+      const { signedIn } = await signup(email, password);
+
+      if (signedIn) {
+        // Account auto-confirmed and session established — go straight in.
+        navigate('/dashboard');
+        return;
+      }
+
+      // Fallback: account exists but could not be signed into automatically.
+      setSuccess('Account created. Please sign in to continue.');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed. Please try again.');

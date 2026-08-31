@@ -7,6 +7,8 @@ import {
   forgotPassword,
   confirmForgotPassword,
   adminDeleteUser,
+  adminConfirmSignUp,
+  adminMarkEmailVerified,
   cognitoClient,
   CLIENT_ID,
 } from '../../lib/cognito.js';
@@ -140,27 +142,41 @@ async function handleSignUp(
 
   const result = await signUp({ email, password, name });
 
-  // Auto-confirm user (prototype: skip email verification for demo purposes)
+  // Prototype behaviour: confirm the account immediately so people can try the
+  // app without an email round-trip.
+  //
+  // Two steps are required, and BOTH matter:
+  //   1. AdminConfirmSignUp  — without it, sign-in fails with UserNotConfirmed
+  //   2. email_verified=true — without it, ForgotPassword fails because Cognito
+  //      sees no verified delivery medium
+  let confirmed = result.confirmed;
+
   try {
-    const { AdminConfirmSignUpCommand } = await import('@aws-sdk/client-cognito-identity-provider');
-    const { cognitoClient } = await import('../../lib/cognito.js');
-    await (cognitoClient as any).send(new AdminConfirmSignUpCommand({
-      UserPoolId: process.env.USER_POOL_ID,
-      Username: email,
-    }));
+    await adminConfirmSignUp(email);
+    await adminMarkEmailVerified(email);
+    confirmed = true;
   } catch (confirmErr) {
-    logger.warn('Auto-confirm failed (user may need manual confirmation)', {
-      error: confirmErr instanceof Error ? confirmErr.message : String(confirmErr),
+    // Logged at ERROR, not WARN: if this fails the account exists but cannot be
+    // signed into, which is a broken signup from the user's point of view.
+    logger.error('Auto-confirm failed - account created but not usable', confirmErr, {
+      action: 'signup',
+      userId: result.userSub,
     });
   }
 
-  logger.info('Sign-up successful', { action: 'signup', userId: result.userSub });
+  logger.info('Sign-up successful', {
+    action: 'signup',
+    userId: result.userSub,
+    confirmed,
+  });
 
   return success(
     {
-      message: 'User created successfully',
+      message: confirmed
+        ? 'Account created successfully'
+        : 'Account created but requires confirmation before sign in',
       userId: result.userSub,
-      confirmed: result.confirmed,
+      confirmed,
     },
     201,
   ) as APIGatewayProxyResult;

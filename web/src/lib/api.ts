@@ -144,8 +144,29 @@ export interface SigninParams {
   password: string;
 }
 
-export async function signup(params: SignupParams): Promise<{ message: string }> {
+export interface SignupResponse {
+  message: string;
+  userId: string;
+  /** True when the account was auto-confirmed and can be signed into immediately */
+  confirmed: boolean;
+}
+
+export async function signup(params: SignupParams): Promise<SignupResponse> {
   return apiFetch('/auth/signup', { method: 'POST', body: params });
+}
+
+/** Request a password-reset code by email. */
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  return apiFetch('/auth/forgot-password', { method: 'POST', body: { email } });
+}
+
+/** Complete a password reset using the emailed code. */
+export async function confirmForgotPassword(params: {
+  email: string;
+  confirmationCode: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  return apiFetch('/auth/confirm-forgot-password', { method: 'POST', body: params });
 }
 
 export async function signin(params: SigninParams): Promise<AuthTokens> {

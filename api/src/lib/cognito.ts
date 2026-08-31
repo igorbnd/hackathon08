@@ -8,6 +8,8 @@ import {
   GlobalSignOutCommand,
   AdminGetUserCommand,
   AdminDeleteUserCommand,
+  AdminConfirmSignUpCommand,
+  AdminUpdateUserAttributesCommand,
   type AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider';
 
@@ -83,6 +85,39 @@ export async function confirmSignUp(
     ClientId: CLIENT_ID,
     Username: email,
     ConfirmationCode: confirmationCode,
+  });
+
+  await cognitoClient.send(command);
+}
+
+/**
+ * Confirm a newly signed-up user without requiring an emailed code.
+ *
+ * Prototype behaviour: we skip email verification so people can try the app
+ * immediately. Requires the `cognito-idp:AdminConfirmSignUp` IAM action.
+ */
+export async function adminConfirmSignUp(username: string): Promise<void> {
+  const command = new AdminConfirmSignUpCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: username,
+  });
+
+  await cognitoClient.send(command);
+}
+
+/**
+ * Mark a user's email as verified.
+ *
+ * AdminConfirmSignUp confirms the account but leaves `email_verified` false.
+ * Cognito refuses ForgotPassword when there is no verified delivery medium, so
+ * without this the password-reset flow cannot work.
+ * Requires the `cognito-idp:AdminUpdateUserAttributes` IAM action.
+ */
+export async function adminMarkEmailVerified(username: string): Promise<void> {
+  const command = new AdminUpdateUserAttributesCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: username,
+    UserAttributes: [{ Name: 'email_verified', Value: 'true' }],
   });
 
   await cognitoClient.send(command);

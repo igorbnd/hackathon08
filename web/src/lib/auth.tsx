@@ -37,7 +37,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<{ signedIn: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -92,9 +92,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const signup = useCallback(async (email: string, password: string) => {
-    await api.signup({ email, password });
-  }, []);
+  /**
+   * Create an account. Accounts are auto-confirmed server-side in this
+   * prototype, so on success we sign the user straight in rather than bouncing
+   * them to the login page. Returns whether the session was established.
+   */
+  const signup = useCallback(
+    async (email: string, password: string): Promise<{ signedIn: boolean }> => {
+      const result = await api.signup({ email, password });
+
+      if (!result.confirmed) {
+        // Auto-confirm failed server-side; the account exists but cannot be
+        // signed into yet. Caller should tell the user rather than silently fail.
+        return { signedIn: false };
+      }
+
+      await login(email, password);
+      return { signedIn: true };
+    },
+    [login],
+  );
 
   const value: AuthContextValue = {
     user,

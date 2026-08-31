@@ -88,6 +88,12 @@ export class ComputeStack extends cdk.Stack {
           'cognito-idp:GlobalSignOut',
           'cognito-idp:AdminGetUser',
           'cognito-idp:AdminDeleteUser',
+          // Required for prototype auto-confirm on signup. Without
+          // AdminConfirmSignUp, new accounts stay unconfirmed and sign-in fails
+          // with UserNotConfirmedException. Without AdminUpdateUserAttributes,
+          // email_verified stays false and password reset cannot work.
+          'cognito-idp:AdminConfirmSignUp',
+          'cognito-idp:AdminUpdateUserAttributes',
         ],
         resources: [`arn:aws:cognito-idp:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:userpool/*`],
       }),
