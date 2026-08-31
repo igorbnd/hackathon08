@@ -94,6 +94,11 @@ export class ComputeStack extends cdk.Stack {
           // email_verified stays false and password reset cannot work.
           'cognito-idp:AdminConfirmSignUp',
           'cognito-idp:AdminUpdateUserAttributes',
+          // Signup uses AdminCreateUser + AdminSetUserPassword rather than the
+          // public SignUp API, so that Cognito sends no verification email for
+          // an account we confirm immediately anyway.
+          'cognito-idp:AdminCreateUser',
+          'cognito-idp:AdminSetUserPassword',
         ],
         resources: [`arn:aws:cognito-idp:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:userpool/*`],
       }),

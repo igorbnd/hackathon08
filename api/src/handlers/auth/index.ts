@@ -1,14 +1,12 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { z } from 'zod';
 import {
-  signUp,
+  adminCreateConfirmedUser,
   initiateAuth,
   globalSignOut,
   forgotPassword,
   confirmForgotPassword,
   adminDeleteUser,
-  adminConfirmSignUp,
-  adminMarkEmailVerified,
   cognitoClient,
   CLIENT_ID,
 } from '../../lib/cognito.js';
@@ -182,43 +180,25 @@ async function handleSignUp(
   const { email, password, name } = validation.data;
   logger.info('Sign-up attempt', { action: 'signup' });
 
-  const result = await signUp({ email, password, name });
-
-  // Prototype behaviour: confirm the account immediately so people can try the
-  // app without an email round-trip.
+  // Created through the admin API rather than the public SignUp API so that
+  // Cognito sends no verification email. The account is confirmed immediately,
+  // so emailing a code the user never needs to enter is just confusing.
   //
-  // Two steps are required, and BOTH matter:
-  //   1. AdminConfirmSignUp  — without it, sign-in fails with UserNotConfirmed
-  //   2. email_verified=true — without it, ForgotPassword fails because Cognito
-  //      sees no verified delivery medium
-  let confirmed = result.confirmed;
-
-  try {
-    await adminConfirmSignUp(email);
-    await adminMarkEmailVerified(email);
-    confirmed = true;
-  } catch (confirmErr) {
-    // Logged at ERROR, not WARN: if this fails the account exists but cannot be
-    // signed into, which is a broken signup from the user's point of view.
-    logger.error('Auto-confirm failed - account created but not usable', confirmErr, {
-      action: 'signup',
-      userId: result.userSub,
-    });
-  }
+  // This also removes the previous partial-failure state: signup either fully
+  // succeeds (confirmed, email verified, signable-in) or throws. There is no
+  // longer a path that creates an account which cannot be used.
+  const result = await adminCreateConfirmedUser({ email, password, name });
 
   logger.info('Sign-up successful', {
     action: 'signup',
     userId: result.userSub,
-    confirmed,
   });
 
   return success(
     {
-      message: confirmed
-        ? 'Account created successfully'
-        : 'Account created but requires confirmation before sign in',
+      message: 'Account created successfully',
       userId: result.userSub,
-      confirmed,
+      confirmed: true,
     },
     201,
   ) as APIGatewayProxyResult;
