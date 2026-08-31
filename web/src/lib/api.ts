@@ -119,11 +119,52 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(error.message || `Request failed: ${response.status}`);
+    throw new Error(await extractErrorMessage(response));
   }
 
   return response.json();
+}
+
+/**
+ * Human-readable fallbacks, used only when the server sent no message.
+ * A bare "Request failed: 400" tells the user nothing actionable.
+ */
+const STATUS_FALLBACKS: Record<number, string> = {
+  400: 'That request was not valid. Please check the details and try again.',
+  401: 'Your session has expired. Please sign in again.',
+  403: 'You do not have permission to do that.',
+  404: 'We could not find what you were looking for.',
+  409: 'That conflicts with something that already exists.',
+  413: 'That file is too large. The maximum upload size is 5 MB.',
+  422: 'We could not process that document. Please try a different file.',
+  429: 'Too many requests. Please wait a moment and try again.',
+  500: 'Something went wrong on our side. Please try again.',
+  502: 'The service is temporarily unavailable. Please try again.',
+  503: 'The service is temporarily unavailable. Please try again.',
+  504: 'That took too long to process. Please try again.',
+};
+
+/**
+ * Pull the most useful message out of a failed response.
+ *
+ * The API returns errors as `{ error: "..." }` (see api/src/lib/response.ts).
+ * `message` is also checked because some AWS-generated responses use that key.
+ */
+async function extractErrorMessage(response: Response): Promise<string> {
+  const payload = await response.json().catch(() => null);
+
+  if (payload && typeof payload === 'object') {
+    const body = payload as Record<string, unknown>;
+    const serverMessage = body.error ?? body.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim()) {
+      return serverMessage;
+    }
+  }
+
+  return (
+    STATUS_FALLBACKS[response.status] ??
+    `Request failed (${response.status}). Please try again.`
+  );
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────────

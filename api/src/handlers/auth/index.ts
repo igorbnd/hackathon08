@@ -101,25 +101,67 @@ export const handler = async (
       default:
         return error('Not found', 404) as APIGatewayProxyResult;
     }
-  } catch (err: any) {
-    // Return Cognito errors as 400 with the actual message
-    const cognitoErrors = [
-      'InvalidPasswordException',
-      'UsernameExistsException',
-      'UserNotConfirmedException',
-      'NotAuthorizedException',
-      'UserNotFoundException',
-      'InvalidParameterException',
-      'CodeMismatchException',
-      'ExpiredCodeException',
-    ];
-    if (err?.name && cognitoErrors.includes(err.name)) {
-      return error(err.message ?? 'Authentication error', 400) as APIGatewayProxyResult;
+  } catch (err: unknown) {
+    const friendly = friendlyCognitoMessage(err, path);
+    if (friendly) {
+      return error(friendly, 400) as APIGatewayProxyResult;
     }
     logger.error('Unhandled error in auth handler', err);
     return error('Internal server error', 500) as APIGatewayProxyResult;
   }
 };
+
+/**
+ * Translate Cognito exceptions into messages a user can act on.
+ *
+ * Returns null for anything unrecognised, which the caller then treats as a 500
+ * — so an unexpected failure is never dressed up as a user error.
+ */
+function friendlyCognitoMessage(err: unknown, path: string): string | null {
+  const name = (err as { name?: string })?.name;
+  const raw = (err as { message?: string })?.message;
+
+  switch (name) {
+    // Both map to the same text on sign-in so that a wrong password and an
+    // email with no account are indistinguishable. Returning different messages
+    // would let anyone enumerate which addresses are registered.
+    case 'NotAuthorizedException':
+    case 'UserNotFoundException':
+      if (path === '/auth/signin') return 'Incorrect email or password.';
+      if (path === '/auth/refresh') {
+        return 'Your session has expired. Please sign in again.';
+      }
+      return 'That request could not be authorised.';
+
+    case 'UsernameExistsException':
+      return 'An account with that email address already exists.';
+
+    case 'UserNotConfirmedException':
+      return 'That account has not been confirmed. Please sign up again or contact support.';
+
+    // Cognito states which specific rule failed here, which is genuinely more
+    // useful than anything generic we could substitute.
+    case 'InvalidPasswordException':
+      return raw ?? 'That password does not meet the requirements.';
+
+    case 'CodeMismatchException':
+      return 'That code is not correct. Please check it and try again.';
+
+    case 'ExpiredCodeException':
+      return 'That code has expired. Please request a new one.';
+
+    case 'LimitExceededException':
+    case 'TooManyRequestsException':
+    case 'TooManyFailedAttemptsException':
+      return 'Too many attempts. Please wait a few minutes and try again.';
+
+    case 'InvalidParameterException':
+      return raw ?? 'One of the details provided was not valid.';
+
+    default:
+      return null;
+  }
+}
 
 // ─── Sub-Handlers ───────────────────────────────────────────────────────────
 
@@ -295,12 +337,29 @@ async function handleForgotPassword(
   const { email } = validation.data;
   logger.info('Forgot password request', { action: 'forgot-password' });
 
-  await forgotPassword(email);
+  // Always report the same outcome, whether or not the address has an account.
+  // Surfacing UserNotFoundException here would let anyone test which email
+  // addresses are registered.
+  try {
+    await forgotPassword(email);
+    logger.info('Forgot password code sent', { action: 'forgot-password' });
+  } catch (err: unknown) {
+    const name = (err as { name?: string })?.name;
 
-  logger.info('Forgot password code sent', { action: 'forgot-password' });
+    if (name === 'UserNotFoundException' || name === 'InvalidParameterException') {
+      // InvalidParameterException also covers "no verified email on the account",
+      // which is equally not something to disclose.
+      logger.info('Forgot password request for unusable account', {
+        action: 'forgot-password',
+        reason: name,
+      });
+    } else {
+      throw err;
+    }
+  }
 
   return success({
-    message: 'Password reset code sent to your email',
+    message: 'If an account exists for that email address, a reset code has been sent.',
   }) as APIGatewayProxyResult;
 }
 

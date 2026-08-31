@@ -31,7 +31,9 @@ export function ForgotPasswordPage() {
     try {
       await forgotPassword(email);
       setStep('confirm');
-      setNotice(`A reset code has been sent to ${email}. It may take a minute to arrive.`);
+      setNotice(
+        `If an account exists for ${email}, a reset code has been sent. It may take a minute to arrive.`,
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Could not start password reset. Please try again.',
